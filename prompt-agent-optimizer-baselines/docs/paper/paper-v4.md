@@ -242,6 +242,97 @@ of taking on trust.*
 "Not confirmed" in the rightmost column means we did not verify a code/data release for that system
 as part of this literature pass (Section 8) — it is not a claim that the work is closed.
 
+### 2.7 Detailed comparison against the closest related harnesses
+
+Table 1 states the gap in one row each; this subsection makes the comparison concrete for the five
+systems closest to this paper's design (Sections 2.1, 2.3), stating specifically what each system's
+own evaluation would and would not have caught if it had been pointed at the same failure modes this
+benchmark targets, and vice versa. The point of doing this per-system rather than only in aggregate
+is that "evaluates a fixed agent, not an optimizer" (our recurring claim against four of the five)
+is easy to state and easy to under-argue; a reader should be able to check it against each system's
+actual evaluation design, not just our summary of it.
+
+**Against VeRO (Ursekar et al., 2026).** VeRO's harness would catch something ours does not: whether
+an optimizer, given the freedom to edit an agent's full harness rather than only its prompt text,
+actually uses that freedom, and how much its edits vary across independent attempts. Our benchmark
+never gives either optimizer under test that freedom — both Foundry's optimizer and our DSPy
+baseline operate at the instructions/tool-description text layer only (Section 5.1), so a question
+like "does the optimizer default to safe, low-diversity prompt-only edits when code edits were
+available" is out of scope for us by construction, not by oversight. Conversely, VeRO's own
+evaluation — comparing edit diversity and impact across versioned snapshots — has no place in its
+design to ask whether a given edit, however diverse or impactful, preserved a property adversarial to
+the objective the edit was scored against. If VeRO's harness were pointed at the same ten agents this
+benchmark uses, it could tell you whether a code-editing optimizer touched agent 05's safety
+instructions at all and how much; it could not tell you, without adopting something like our gating
+categories (Section 4.2), whether the touched version still refuses to name a medical condition.
+
+**Against JTPRO (Ghoshal et al., 2026).** JTPRO's evaluation would catch something ours is not
+designed to measure: whether jointly optimizing instructions and tool schemas together beats
+optimizing either one alone on tool-selection and slot-filling accuracy. Our benchmark has no
+isolated-vs-joint optimization arm — both systems under test always optimize instructions and tool
+descriptions together (Section 5.1), so we cannot speak to JTPRO's headline finding one way or the
+other; we adopt the same joint optimization surface rather than test whether jointness itself helps.
+Conversely, on JTPRO's own reported evaluation (accuracy on tool-selection and slot-filling tasks),
+a tool-schema edit that loosens a required parameter's enum or drops a disambiguating description —
+exactly the kind of change our `tool_rules` axis (immutable names/types/enums, Section 4.1) exists
+to catch — could plausibly *improve* the accuracy metric JTPRO reports (a looser schema can make it
+easier for the agent to pick a plausible tool) while simultaneously widening what a `forbidden`
+tool-call policy would let through. Nothing in an accuracy-only evaluation of joint optimization
+would surface that trade-off; it is the same "score went up, something the score didn't measure
+degraded" pattern Section 1 frames as this paper's subject, applied specifically to the tool-schema
+half of JTPRO's own optimization surface.
+
+**Against AgentDojo (Debenedetti et al., 2024).** AgentDojo would catch something ours does not
+attempt: breadth and realism of attack surface. Its task suites, multiple environments, and paired
+attacks-and-defenses give a far more thorough picture of a fixed agent's injection resistance than
+our single agent 07 with its two rephrasing-linked splits (Section 4.3) does or is meant to. What
+AgentDojo's design does not do — because it evaluates a fixed agent, with or without a fixed defense,
+not an agent under an automated rewrite process — is notice a *regression*: if an optimizer rewrote
+the system prompt of an AgentDojo-evaluated agent, AgentDojo's own harness would need to be re-run
+before and after the rewrite for a human to even think to compare the two scores, and nothing in its
+design flags that comparison as the one to make. Our benchmark's contribution at this intersection is
+exactly that comparison, made structural rather than incidental: agent 07's baseline-vs-optimized
+delta on the injection-resistance axis is a first-class, always-computed number (Table 3/4), not
+something a user of the harness would have to think to construct.
+
+**Against AgentLure / Argus (Weng et al., 2026).** AgentLure would catch something agent 07 is
+already documented (Section 8) as unable to: whether an agent resists an attacker that adapts its
+payload to the specific task context, rather than one of a fixed, pre-authored family of injection
+patterns rephrased across our optimize/holdout split (Section 4.3). This is a real gap in agent 07's
+design, not a strength we're claiming — the rephrasing-across-splits design tests generalization
+across *phrasing*, not adaptation to *context*, and AgentLure's threat model is strictly the harder
+and more realistic of the two. What AgentLure does not do, sharing this with AgentDojo, is evaluate
+an optimizer's effect on the property it measures: its unit of evaluation is a fixed agent (optionally
+with a fixed defense) against a context-aware attack, not a before/after comparison across an
+automated instruction rewrite. A context-aware attack suite and an optimizer-under-rewrite protocol
+are complementary, not competing, designs — Section 9 already lists tightening agent 07 toward a
+harder threat model as future work; doing so would still need this paper's before/after structure
+layered on top to ask the question AgentLure itself does not ask.
+
+**Against AgentSecBench (Alpay & Alpay, 2026).** AgentSecBench would catch something our deterministic
+scoring (Section 5.3) structurally cannot: a noninterference violation that never manifests as a
+matched string or a flagged tool call — for instance, a response whose *tone* or *emphasis* shifts in
+a way that is causally downstream of untrusted content, without ever producing text that trips a
+`must_not_appear` pattern or a `tool_call.policy` check. Our `must_not_appear`/tool-call-policy axis
+is a pattern-match proxy for the property AgentSecBench formalizes directly as noninterference between
+an untrusted observation and a protected output/action predicate; a sufficiently subtle dependence
+could satisfy every pattern-match check in our contract while still failing AgentSecBench's stricter
+test. Conversely, AgentSecBench's three "games" evaluate a fixed agent's standing on a noninterference
+property at a point in time; they do not, as documented, ask whether that standing changes after an
+automated instruction rewrite — the same gap as AgentDojo and AgentLure, for a formally stronger
+property. Section 9 already names adopting a noninterference-style check as a direction for agent 07;
+the point worth making explicitly here is that doing so would upgrade *what* our before/after
+comparison measures, not add the before/after structure itself, which AgentSecBench's own design does
+not have a place for.
+
+**What is common across all five.** None of these five systems' own evaluations include a replicate-seed
+design or a statistical test for run-to-run stochasticity (Section 5.4, 5.6) — VeRO's versioned
+snapshots come closest, but its own reported evaluation compares snapshots for edit diversity and
+impact, not for whether a given snapshot's score improvement clears a derived significance floor
+against independent replicate attempts. This is not a claim that any of the five should have included
+one for their own research questions; it is the specific methodological gap this paper's protocol
+(Section 5) closes for the question this paper asks, which none of the five ask.
+
 ## 3. Why we compare against DSPy specifically
 
 We evaluate Foundry's optimizer against an open baseline for a reproducibility reason stated plainly
@@ -335,7 +426,8 @@ that condition's selection process has seen.
 
 ### 4.4 What gap this fills
 
-Section 2.6 (Table 1) states this in comparative terms. Concretely: existing APO benchmarks measure
+Section 2.6 (Table 1) states this in comparative terms; Section 2.7 makes it concrete system by
+system. Concretely: existing APO benchmarks measure
 whether optimization improves a task metric; existing agent benchmarks measure whether a fixed agent
 can perform a task or resist an attack, including, in InjecAgent's case, an indirect injection
 delivered through tool output. This benchmark is, to our knowledge, the first to hold the
