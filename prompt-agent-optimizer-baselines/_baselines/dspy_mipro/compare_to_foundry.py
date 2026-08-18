@@ -85,17 +85,27 @@ def summarize(values: list[float]) -> dict:
             "ci95_bootstrap": [round(ci[0], 4), round(ci[1], 4)] if ci else None, "note": note}
 
 
-def foundry_holdout_scores(manifests: list[dict]) -> list[float]:
-    """Foundry run manifests (run_manifest_template.json) don't have a first-class holdout score
-    field by default — outputs.composite_score is the wizard's own reported number. Prefer an
-    explicit holdout-specific field if one was added; fall back to composite_score with a note."""
+def foundry_holdout_scores(manifests: list[dict]) -> tuple[list[float], int]:
+    """Foundry run manifests only carry a holdout-comparable score once a response-level scoring
+    harness — one that runs the exported/deployed candidate against dataset/holdout.jsonl and scores
+    its real responses with the shared score_response function — writes
+    outputs.holdout_composite_score. That harness does not exist in this pack yet (see
+    docs/paper/review-round-2.md Weakness 1 and docs/paper/paper-v3.md Sec 5.2/8): the Optimize
+    wizard's own outputs.composite_score is a different, in-sample number computed against whatever
+    was uploaded to the wizard (dataset/optimize.jsonl, per experiment-runbook.md Step 3) — it is not
+    a holdout score and is never substituted here, even though the two fields can look
+    interchangeable. Returns (scores, n_in_sample_only) so callers can report, rather than silently
+    absorb, manifests that have an in-sample score but no genuine holdout score."""
     scores = []
+    n_in_sample_only = 0
     for m in manifests:
         outputs = m.get("outputs", {})
-        v = outputs.get("holdout_composite_score", outputs.get("composite_score"))
+        v = outputs.get("holdout_composite_score")
         if v is not None:
             scores.append(v)
-    return scores
+        elif outputs.get("composite_score") is not None:
+            n_in_sample_only += 1
+    return scores, n_in_sample_only
 
 
 def main() -> None:
@@ -122,7 +132,27 @@ def main() -> None:
         dspy_growth = [m["outputs"]["instruction_growth_ratio_words_approx"] for m in dspy_manifests]
         any_dry_run = any(m.get("dry_run") for m in dspy_manifests)
 
-        foundry_scores = foundry_holdout_scores(foundry_manifests)
+        foundry_scores, foundry_in_sample_only = foundry_holdout_scores(foundry_manifests)
+
+        if not foundry_manifests:
+            foundry_status = "no manifests found under <pack_root>/runs/{}/*.manifest.json".format(agent_id)
+        elif not foundry_scores:
+            # foundry_manifests is non-empty but foundry_holdout_scores() found no
+            # outputs.holdout_composite_score on any of them: there is no response-level scoring
+            # harness in this pack yet that runs the exported Foundry candidate against
+            # dataset/holdout.jsonl and scores it with score_response (see docs/paper/paper-v3.md
+            # Sec 5.2/8 and docs/paper/review-round-2.md). We report that gap instead of silently
+            # filling it with the wizard's own in-sample composite_score.
+            foundry_status = (
+                f"{len(foundry_manifests)} manifest(s) found but none has "
+                "outputs.holdout_composite_score set (a response-level, holdout-scored harness for "
+                "the Foundry track does not exist in this pack yet). "
+                f"{foundry_in_sample_only} of them report an in-sample outputs.composite_score from "
+                "the Optimize wizard instead — that number is intentionally NOT used here, since it "
+                "is not comparable to the DSPy track's holdout-only score."
+            )
+        else:
+            foundry_status = "OK"
 
         table[agent_id] = {
             "dspy_mipro_v2": {
@@ -135,9 +165,9 @@ def main() -> None:
             },
             "foundry_optimizer": {
                 "n_runs": len(foundry_manifests),
+                "n_in_sample_only_no_holdout_score": foundry_in_sample_only,
                 "holdout_score": summarize(foundry_scores),
-                "status": "no manifests found under <pack_root>/runs/{}/*.manifest.json".format(agent_id)
-                          if not foundry_manifests else "OK",
+                "status": foundry_status,
             },
         }
 
@@ -158,6 +188,12 @@ def main() -> None:
         print("\nNo Foundry run manifests found anywhere under <pack_root>/runs/. This table is "
               "DSPy-only until Foundry portal runs are executed and their manifests placed at "
               "<pack_root>/runs/<agent_id>/<run_label>.manifest.json (see _tools/run_manifest_template.json).")
+    elif any(row["foundry_optimizer"]["n_in_sample_only_no_holdout_score"] for row in table.values()):
+        print("\nSome Foundry manifests exist but have no outputs.holdout_composite_score — this pack "
+              "does not yet include a harness that scores an exported Foundry candidate's real "
+              "holdout responses with score_response. Their foundry_optimizer.holdout_score is "
+              "correctly empty rather than backfilled from the wizard's in-sample composite_score; "
+              "see each agent's foundry_optimizer.status for details.")
 
 
 if __name__ == "__main__":

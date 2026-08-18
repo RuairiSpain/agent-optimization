@@ -33,6 +33,9 @@
   "outputs": {
     "candidate_instructions_path": "",
     "composite_score": null,
+    "composite_score_note": "This is the Optimize wizard's own reported number, computed in-sample against dataset.file_uploaded (dataset/optimize.jsonl). It is NOT a holdout score and compare_to_foundry.py never treats it as one.",
+    "holdout_composite_score": null,
+    "holdout_composite_score_note": "Leave null until a response-level harness runs this exported candidate against dataset/holdout.jsonl and scores its real responses/tool calls with the shared score_response function (see _baselines/dspy_mipro/metric.py). That harness does not exist in this pack yet (docs/paper/paper-v3.md Sec 5.2/8) -- compare_to_foundry.py reports the gap explicitly rather than substituting composite_score.",
     "per_rubric_scores": {},
     "instruction_token_count": null,
     "instruction_growth_ratio_vs_baseline": null,
