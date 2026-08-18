@@ -119,8 +119,19 @@ Each agent's `expected/expectations.json` carries:
 - **`_tools/validate_candidate.py`** — scores an optimized candidate's instructions against its
   contract. Deterministic rule types (`regex`, `all_of_regex`, `any_of_regex`, `absent`) are checked
   automatically; `semantic` rules are collected into an **UNJUDGED** queue and are never silently
-  passed. Refuses to run unless `--candidate-source optimize` is passed explicitly. Exits 1 on any
-  critical deterministic failure.
+  passed unless `--judge-backend {stub,litellm}` is passed to resolve them with an LLM judge (see
+  `_tools/llm_judge.py` below). Refuses to run unless `--candidate-source optimize` is passed
+  explicitly. Exits 1 on any critical deterministic (or judge-resolved) failure.
+- **`_tools/llm_judge.py`** — shared judge layer resolving `semantic` rules and scoring `rubrics`
+  questions, used by both `validate_candidate.py --judge-backend` and the DSPy baseline's
+  `run_mipro_baseline.py --use-judge` (see `_baselines/dspy_mipro/README.md`). Respects each agent's
+  `judge_config`: `primary_judge_model` pinned to a vendor family disjoint from every supported
+  `optimization_model`, an optional same-family `cross_judge_model` run in parallel to *measure*
+  self-preference bias (never to override the primary verdict) via `JudgeAgreementTracker`'s
+  corpus-level Cohen's kappa / Pearson r, and `repeats_per_item` majority-voting/averaging. Zero
+  hard dependency for anyone who never passes `--judge-backend`/`--use-judge`; `--judge-backend stub`
+  gives a zero-cost, zero-network offline smoke test (StubJudge — a lexical-overlap heuristic with
+  no real understanding, proves the plumbing only).
 - **`_tools/build_foundry_dataset.py`** — strips authoring fields from `dataset/optimize.jsonl` to
   produce a portal- or CLI-ready upload (the wizard has no column-mapping step). Hard-refuses
   `holdout.jsonl` by filename.

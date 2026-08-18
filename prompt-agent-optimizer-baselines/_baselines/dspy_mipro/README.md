@@ -45,14 +45,59 @@ access at all, and its results are directly comparable via `compare_to_foundry.p
 5. **The response-level metric only grades a row against a named `agent_tests` entry when the
    dataset row's `query` matches an `agent_tests[].input` string exactly.** Measured overlap is a
    documented minority of rows per agent (40-90%, varies by agent — see `metric.py` docstring); rows
-   without a match fall back to the universal `must_not_appear` guard only. This is a real, not
-   hidden, limitation of the free (non-judge) scoring path — see item 6.
-6. **No LLM-judge layer is wired up by default.** `score_response` and `instruction_level_report` are
-   both pure regex/string checks — zero API cost, but they cannot evaluate the `semantic` rules or
-   `rubrics` questions in `expected/expectations.json` (same "UNJUDGED queue" limitation
-   `validate_candidate.py` documents for the Foundry track). Adding a judge-LM layer here, pinned to
-   a vendor family disjoint from `--prompt-lm`/`--task-lm` per the pack's `judge_config` convention,
-   is the natural next extension — not yet built.
+   without a match fall back to the universal `must_not_appear` guard only.
+6. **The judge layer is off by default** (`--use-judge`) — without it, `score_response` and
+   `instruction_level_report` are both pure regex/string checks, zero API cost, and cannot evaluate
+   `semantic` rules or `rubrics` questions (same "UNJUDGED queue" limitation `validate_candidate.py`
+   documents without `--judge-backend`). See "Judge-LM layer" below for what turning it on changes,
+   and its own caveats (self-preference bias, repeat-count cost, StubJudge's total lack of real
+   judgment).
+
+## Judge-LM layer (optional, `--use-judge`)
+
+Resolves `semantic` instruction_rules and scores `rubrics` questions via
+`../../_tools/llm_judge.py` — the SAME shared judge module the Foundry-side
+`validate_candidate.py --judge-backend` flag uses, so both tracks judge semantic content
+identically. Respects each agent's `judge_config` in `expected/expectations.json`:
+`primary_judge_model` (pinned to a vendor family disjoint from every supported Foundry
+`optimization_model`), `cross_judge_model` (deliberately same-family as one condition, run in
+parallel to *measure* self-preference bias — Zheng et al. 2023; Panickssery et al. 2024 — never to
+override the primary verdict), `repeats_per_item`, and `inference_temperature`.
+
+```bash
+# Zero-cost judge-layer smoke test (StubJudge — a lexical-overlap heuristic with NO real
+# understanding; proves the plumbing, not judge quality):
+python run_mipro_baseline.py --agent 05-clinical-triage-safety --dry-run --use-judge
+
+# Real judge resolution using the agent's own judge_config defaults:
+python run_mipro_baseline.py --agent 01-travel-approval-strict --seed 0 \
+    --task-lm openai/gpt-4.1-mini --prompt-lm openai/gpt-5 --use-judge
+
+# ...plus a cross-judge pass to report corpus-level primary/cross agreement (Cohen's kappa for
+# semantic rules, Pearson r for Likert rubrics) — the self-preference-bias check:
+python run_mipro_baseline.py --agent 01-travel-approval-strict --seed 0 \
+    --task-lm openai/gpt-4.1-mini --prompt-lm openai/gpt-5 --use-judge --cross-judge
+```
+
+**Cost control, deliberate:** by default the judge is used only for the FINAL instruction-level
+report and holdout evaluation, not inside MIPROv2's search loop (which would multiply judge calls
+by `trials × trainset/valset size × repeats_per_item`). Pass `--judge-during-search` to opt into
+the much more expensive fully-judged search signal. `--judge-weight` (default 0.4) controls how
+much the holdout score blends judge-scored rubrics against the deterministic score.
+
+**Verified end-to-end with StubJudge** (zero cost, zero network): all 10 agents × 2 seeds (20/20
+runs) complete cleanly with `--use-judge` on, correctly moving every previously-UNJUDGED semantic
+rule to a PASS/FAIL verdict; `validate_candidate.py --judge-backend stub` was separately confirmed
+to fully resolve all 10 agents' baselines with zero remaining UNJUDGED items (9/10 correctly
+BLOCKED on their planted critical flaws; the tenth, `09-code-review-assistant-strict`, is the
+control agent with no critical flaw to find).
+
+**StubJudge's heuristic is intentionally dumb** — lexical term overlap between the statement/question
+and the text, nothing more — so its individual verdicts will disagree with what a careful human
+reader would conclude on plenty of items (see the example run above, where it flags one of agent
+01's must_have items as failing). That's expected and fine for a plumbing smoke test; never read a
+`--dry-run --use-judge` verdict as evidence about a candidate's actual quality, only as proof the
+judge-resolution code path executes correctly end to end.
 
 ## Setup
 
@@ -127,6 +172,7 @@ yet, it says so explicitly rather than filling the gap with a placeholder number
 | `metric.py` | Response-level MIPROv2 metric + instruction-level report (imports `validate_candidate.py`) |
 | `dspy_program.py` | Builds the `dspy.ChainOfThought`/`dspy.ReAct` module per agent |
 | `stub_lm.py` | Zero-cost, field-adaptive stub LM for `--dry-run` smoke testing only |
-| `run_mipro_baseline.py` | CLI: one agent, one seed, full compile + holdout eval + manifest |
+| `../../_tools/llm_judge.py` | Shared judge backend (`LiteLLMJudge`/`StubJudge`) + `JudgeAgreementTracker`, used by both this baseline and `validate_candidate.py --judge-backend` |
+| `run_mipro_baseline.py` | CLI: one agent, one seed, full compile + holdout eval + manifest, `--use-judge`/`--cross-judge` |
 | `run_all.py` | Loops `run_mipro_baseline.py` over agents × replicate seeds |
 | `compare_to_foundry.py` | Merges DSPy + Foundry run manifests into one comparison table |

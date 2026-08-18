@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,9 +44,14 @@ import dspy
 
 from agent_loader import load_agent
 from dspy_program import build_module, get_program_instructions
-from metric import build_response_metric, instruction_level_report, score_response
+from metric import build_response_metric, instruction_level_report, score_response, score_rubrics_for_response
 from mock_tools import get_call_log, reset_call_log
 from stub_lm import StubLM
+
+_TOOLS_DIR = Path(__file__).resolve().parents[2] / "_tools"
+if str(_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIR))
+from llm_judge import JudgeAgreementTracker, build_judge_backend  # noqa: E402
 
 
 def split_optimize_rows(rows: list, seed: int, val_fraction: float) -> tuple[list, list]:
@@ -60,7 +66,13 @@ def rows_to_examples(rows: list) -> list[dspy.Example]:
     return [dspy.Example(query=r.query).with_inputs("query") for r in rows]
 
 
-def evaluate_on_rows(program, rows, expectations) -> dict:
+def evaluate_on_rows(program, rows, expectations, judge=None, cross_judge=None,
+                      judge_weight: float = 0.4, repeats: int = 1, temperature: float = 0.0) -> dict:
+    """judge=None (default): pure deterministic scoring, zero API cost. Pass a JudgeBackend to
+    additionally blend in judge-scored `rubrics` per row at weight `judge_weight`, and — if
+    cross_judge is also passed — accumulate primary/cross rubric-verdict pairs into a
+    JudgeAgreementTracker whose corpus-level summary is returned alongside the per-row scores."""
+    agreement_tracker = JudgeAgreementTracker() if (judge is not None and cross_judge is not None) else None
     per_row = []
     for row in rows:
         reset_call_log()
@@ -72,11 +84,25 @@ def evaluate_on_rows(program, rows, expectations) -> dict:
         except Exception as e:  # keep going — one bad row shouldn't kill the whole eval
             response_text = f"[PROGRAM ERROR: {type(e).__name__}: {e}]"
         tool_calls = list(get_call_log())
-        score = score_response(row.query, response_text, tool_calls, expectations)
-        per_row.append({"id": row.id, "query": row.query, "response": response_text,
-                         "tool_calls": tool_calls, "score": score})
+        deterministic = score_response(row.query, response_text, tool_calls, expectations)
+        entry = {"id": row.id, "query": row.query, "response": response_text, "tool_calls": tool_calls,
+                  "deterministic_score": deterministic}
+        if judge is not None:
+            rubric_score, rubric_details = score_rubrics_for_response(
+                response_text, expectations, judge, repeats=repeats, temperature=temperature,
+                cross_judge=cross_judge, agreement_tracker=agreement_tracker,
+            )
+            entry["rubric_score"] = rubric_score
+            entry["rubric_details"] = rubric_details
+            entry["score"] = (1 - judge_weight) * deterministic + judge_weight * rubric_score
+        else:
+            entry["score"] = deterministic
+        per_row.append(entry)
     mean_score = sum(r["score"] for r in per_row) / len(per_row) if per_row else 0.0
-    return {"per_row": per_row, "mean_score": mean_score, "n": len(per_row)}
+    result = {"per_row": per_row, "mean_score": mean_score, "n": len(per_row)}
+    if agreement_tracker is not None:
+        result["rubric_judge_agreement"] = agreement_tracker.summary()
+    return result
 
 
 def approx_token_count(text: str) -> int:
@@ -98,10 +124,37 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="use a zero-cost stub LM to smoke-test the pipeline end to end; produces no meaningful optimization, only proves the wiring works")
     ap.add_argument("--root", default="../..", help="pack root, relative to this file's directory")
     ap.add_argument("--out-dir", default="results")
+    ap.add_argument("--use-judge", action="store_true",
+                     help="resolve semantic instruction_rules and score rubrics with an LLM judge "
+                          "(see llm_judge.py) for the instruction-level report and the final "
+                          "holdout evaluation. Under --dry-run this automatically uses the zero-cost "
+                          "StubJudge instead of a real model. Off by default (deterministic-only, "
+                          "matching the pre-judge-layer behavior).")
+    ap.add_argument("--judge-model", default=None, help="overrides judge_config.primary_judge_model")
+    ap.add_argument("--cross-judge", action="store_true",
+                     help="also run judge_config.cross_judge_model (or --cross-judge-model) and "
+                          "report corpus-level primary/cross agreement — the self-preference-bias "
+                          "check. Requires --use-judge and is incompatible with --dry-run (StubJudge "
+                          "has nothing meaningful to cross-check against itself).")
+    ap.add_argument("--cross-judge-model", default=None, help="overrides judge_config.cross_judge_model")
+    ap.add_argument("--judge-repeats", type=int, default=None, help="overrides judge_config.repeats_per_item")
+    ap.add_argument("--judge-weight", type=float, default=0.4,
+                     help="blend weight for judge-scored rubrics vs. the deterministic score in the "
+                          "holdout evaluation (deterministic gets 1 - judge_weight)")
+    ap.add_argument("--judge-during-search", action="store_true",
+                     help="ALSO use the judge inside MIPROv2's own search-loop metric, not just the "
+                          "final evaluation. Multiplies judge calls by trials x trainset/valset size "
+                          "x repeats_per_item — expensive. Off by default.")
     args = ap.parse_args()
 
     if not args.dry_run and not args.task_lm:
         raise SystemExit("--task-lm is required unless --dry-run is set. See the module docstring for examples.")
+    if args.cross_judge and not args.use_judge:
+        raise SystemExit("--cross-judge requires --use-judge.")
+    if args.cross_judge and args.dry_run:
+        raise SystemExit("--cross-judge is incompatible with --dry-run: StubJudge is the same "
+                          "deterministic heuristic regardless of model name, so cross-checking it "
+                          "against itself proves nothing. Drop --cross-judge for a --dry-run smoke test.")
 
     root = (Path(__file__).parent / args.root).resolve()
     spec = load_agent(args.agent, pack_root=root)
@@ -121,8 +174,25 @@ def main() -> None:
 
     dspy.configure(lm=task_lm)
 
+    judge = cross_judge = None
+    judge_repeats, judge_temperature = 1, 0.0
+    judge_config = spec.expectations.get("judge_config", {})
+    if args.use_judge:
+        backend_kind = "stub" if args.dry_run else "litellm"
+        judge_repeats = args.judge_repeats if args.judge_repeats is not None else judge_config.get("repeats_per_item", 1)
+        judge_temperature = judge_config.get("inference_temperature", 0.0)
+        judge_model = args.judge_model or judge_config.get("primary_judge_model")
+        judge = build_judge_backend(judge_model, kind=backend_kind)
+        if args.cross_judge:
+            cross_model = args.cross_judge_model or judge_config.get("cross_judge_model")
+            cross_judge = build_judge_backend(cross_model, kind=backend_kind)
+
     module = build_module(spec)
-    metric = build_response_metric(spec)
+    metric = build_response_metric(
+        spec,
+        judge=judge if args.judge_during_search else None,
+        judge_weight=args.judge_weight, repeats=judge_repeats, temperature=judge_temperature,
+    )
 
     train_rows, val_rows = split_optimize_rows(spec.optimize_rows, seed=args.seed, val_fraction=args.val_fraction)
     trainset, valset = rows_to_examples(train_rows), rows_to_examples(val_rows)
@@ -138,13 +208,21 @@ def main() -> None:
     elapsed_seconds = round(time.time() - t0, 1)
 
     optimized_instructions = get_program_instructions(compiled)
-    optimized_report = instruction_level_report(optimized_instructions, spec.expectations)
-    baseline_report = instruction_level_report(spec.baseline_instructions, spec.expectations)
+    optimized_report = instruction_level_report(optimized_instructions, spec.expectations,
+                                                  judge=judge, cross_judge=cross_judge,
+                                                  repeats=judge_repeats, temperature=judge_temperature)
+    baseline_report = instruction_level_report(spec.baseline_instructions, spec.expectations,
+                                                 judge=judge, cross_judge=cross_judge,
+                                                 repeats=judge_repeats, temperature=judge_temperature)
 
     # `module` is guaranteed untouched by compile() (MIPROv2 deep-copies internally), so it is a
     # valid same-pipeline, same-mocks baseline comparison point for the holdout evaluation.
-    baseline_holdout = evaluate_on_rows(module, spec.holdout_rows, spec.expectations)
-    optimized_holdout = evaluate_on_rows(compiled, spec.holdout_rows, spec.expectations)
+    baseline_holdout = evaluate_on_rows(module, spec.holdout_rows, spec.expectations,
+                                         judge=judge, cross_judge=cross_judge,
+                                         judge_weight=args.judge_weight, repeats=judge_repeats, temperature=judge_temperature)
+    optimized_holdout = evaluate_on_rows(compiled, spec.holdout_rows, spec.expectations,
+                                          judge=judge, cross_judge=cross_judge,
+                                          judge_weight=args.judge_weight, repeats=judge_repeats, temperature=judge_temperature)
 
     out_dir = Path(args.out_dir) / args.agent / run_label
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -177,6 +255,16 @@ def main() -> None:
             "leakage_note": "holdout.jsonl is never passed to trainset/valset or to MIPROv2.compile() — see module docstring.",
         },
         "scope_note": spec.dspy_optimization_scope_note,
+        "judge_config_used": {
+            "enabled": args.use_judge,
+            "backend": ("stub" if args.dry_run else "litellm") if args.use_judge else None,
+            "primary_judge_model": judge.model_name if judge is not None else None,
+            "cross_judge_model": cross_judge.model_name if cross_judge is not None else None,
+            "repeats_per_item": judge_repeats if args.use_judge else None,
+            "inference_temperature": judge_temperature if args.use_judge else None,
+            "judge_weight_in_holdout_score": args.judge_weight if args.use_judge else None,
+            "judge_used_during_search": bool(args.judge_during_search and args.use_judge),
+        },
         "outputs": {
             "instruction_word_count_baseline": approx_token_count(spec.baseline_instructions),
             "instruction_word_count_optimized": approx_token_count(optimized_instructions),
@@ -187,9 +275,13 @@ def main() -> None:
             "optimized_instruction_report_blocked": optimized_report["blocked"],
             "baseline_instruction_critical_failures": len(baseline_report["critical_failures"]),
             "optimized_instruction_critical_failures": len(optimized_report["critical_failures"]),
+            "baseline_instruction_unjudged": len(baseline_report["unjudged"]),
+            "optimized_instruction_unjudged": len(optimized_report["unjudged"]),
             "baseline_holdout_mean_score": round(baseline_holdout["mean_score"], 4),
             "optimized_holdout_mean_score": round(optimized_holdout["mean_score"], 4),
             "holdout_delta": round(optimized_holdout["mean_score"] - baseline_holdout["mean_score"], 4),
+            "optimized_instruction_semantic_agreement": optimized_report.get("primary_cross_judge_agreement"),
+            "optimized_holdout_rubric_agreement": optimized_holdout.get("rubric_judge_agreement"),
         },
     }
     (out_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2))

@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.2.0 — shared LLM-judge layer for semantic rules and rubrics
+
+Adds `_tools/llm_judge.py`, resolving the "UNJUDGED queue" limitation both `validate_candidate.py`
+and the DSPy baseline previously documented: `semantic` instruction_rules and `rubrics` questions
+can now be scored by an LLM judge instead of only regex-backed rules, single-sourced so both tracks
+judge identically.
+
+- `LiteLLMJudge` (real, lazy-imported `litellm` so `_tools/` keeps zero hard dependency for anyone
+  who never opts in) and `StubJudge` (zero-cost, zero-network, lexical-overlap heuristic for offline
+  smoke testing only — proves the plumbing, never treat its verdicts as evidence).
+- Respects each agent's `judge_config`: `primary_judge_model` pinned to a vendor family disjoint
+  from every supported Foundry `optimization_model`; an optional `cross_judge_model`, deliberately
+  same-family as one condition, run in parallel to *measure* self-preference bias (Zheng et al.
+  2023; Panickssery et al. 2024) via `repeats_per_item` majority-voting/averaging — never to
+  override the primary verdict.
+- `JudgeAgreementTracker`: corpus-level Cohen's kappa (binary rules) and Pearson r (Likert rubrics),
+  computed once over all paired ratings accumulated in a run — deliberately has no per-item
+  agreement method, since kappa's chance-correction term is only meaningful over a set of ratings.
+  Both statistics are pure Python (no numpy/scipy) and unit-checked against hand-computable cases
+  (perfect agreement → kappa=1.0; alternating disagreement → kappa≈0; perfect ±correlation →
+  r=±1.0) in `llm_judge.py`'s own `__main__` self-check.
+- `validate_candidate.py` gains `--judge-backend {stub,litellm}`, `--judge-model`, `--cross-judge`,
+  `--cross-judge-model`, `--judge-repeats`, `--judge-temperature`. Default remains `none` — fully
+  backward compatible, unchanged UNJUDGED-queue behavior for anyone not opting in.
+- The DSPy baseline's `metric.py` gains `score_rubrics_for_response` and judge-aware
+  `build_response_metric`/`instruction_level_report`; `run_mipro_baseline.py` gains `--use-judge`,
+  `--judge-model`, `--cross-judge`, `--cross-judge-model`, `--judge-repeats`, `--judge-weight`
+  (blend weight for the holdout score), and `--judge-during-search` (opt-in; judge is used for the
+  final instruction report and holdout evaluation only by default, to control cost — the search
+  loop's own metric stays deterministic-only unless this is passed).
+- Verified end-to-end with StubJudge, zero API cost: all 10 agents × 2 seeds (20/20 runs) complete
+  cleanly through `run_mipro_baseline.py --use-judge`, correctly moving every previously-UNJUDGED
+  semantic rule to PASS/FAIL. `validate_candidate.py --judge-backend stub` independently confirmed
+  to fully resolve all 10 agents' baselines with zero remaining UNJUDGED items — 9/10 correctly
+  BLOCKED on their planted critical flaws, the control agent (`09`) passing clean.
+
 ## 2.1.0 — open DSPy MIPROv2 baseline
 
 Adds `_baselines/dspy_mipro/`, an open, reproducible comparison point for the Foundry optimizer,

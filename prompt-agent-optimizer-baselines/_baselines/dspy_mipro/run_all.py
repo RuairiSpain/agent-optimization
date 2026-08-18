@@ -38,6 +38,8 @@ def main() -> None:
     ap.add_argument("--auto", default="light")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out-dir", default="results")
+    ap.add_argument("--use-judge", action="store_true", help="passed through to run_mipro_baseline.py")
+    ap.add_argument("--cross-judge", action="store_true", help="passed through to run_mipro_baseline.py")
     args = ap.parse_args()
 
     agents = ALL_AGENT_IDS if args.agents == ["all"] else args.agents
@@ -51,6 +53,10 @@ def main() -> None:
                 cmd.append("--dry-run")
             else:
                 cmd += ["--task-lm", args.task_lm, "--prompt-lm", args.prompt_lm or args.task_lm]
+            if args.use_judge:
+                cmd.append("--use-judge")
+            if args.cross_judge:
+                cmd.append("--cross-judge")
             print(f"\n>>> {agent} seed={seed}")
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:

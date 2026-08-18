@@ -20,10 +20,17 @@ different granularities:
    tracks' must_have / should_remove / must_not_appear pass rates directly comparable in one table.
 
 Neither function calls an LLM by default — both are pure regex/string checks, which keeps the
-MIPROv2 search loop's optimization signal free and fast. An OPTIONAL judge-LM layer
-(`build_judge_augmented_metric`) can blend in scored `rubrics` questions via a configured
-`dspy.LM`, gated behind the same `judge_config` vendor-family-disjoint pinning used by the Foundry
-track's judge, for anyone running this with real API access who wants the richer signal.
+MIPROv2 search loop's optimization signal free and fast by default.
+
+An OPTIONAL judge-LM layer (`score_rubrics_for_response`, and `judge=`/`cross_judge=` params on
+`build_response_metric` / `instruction_level_report`) resolves the `semantic` instruction_rules and
+scores the `rubrics` questions, via ../../_tools/llm_judge.py — the SAME shared judge module the
+Foundry-side `validate_candidate.py --judge-backend` flag uses, so both tracks judge semantic
+content identically. Cost control, deliberate: `run_mipro_baseline.py` wires the judge into the
+FINAL holdout evaluation and the instruction-level report by default, NOT into the metric MIPROv2
+calls during its search loop (which would multiply judge calls by trials × trainset/valset size ×
+repeats_per_item) — pass --judge-during-search to opt into the far more expensive fully-judged
+search signal.
 """
 from __future__ import annotations
 
@@ -36,6 +43,11 @@ from typing import Any, Callable
 from mock_tools import get_call_log, reset_call_log
 
 _TOOLS_DIR = Path(__file__).resolve().parents[2] / "_tools"
+if str(_TOOLS_DIR) not in sys.path:
+    # validate_candidate.py does `from llm_judge import ...` (a sibling module in _tools/); since
+    # spec_from_file_location loads it by path rather than as a package member, _tools/ has to be
+    # on sys.path explicitly for that import to resolve.
+    sys.path.insert(0, str(_TOOLS_DIR))
 
 
 def _import_validate_candidate():
@@ -48,6 +60,8 @@ def _import_validate_candidate():
 _vc = _import_validate_candidate()
 eval_match = _vc.eval_match
 validate_instructions = _vc.validate
+
+from llm_judge import JudgeAgreementTracker, judge_rubric_item  # noqa: E402 (needs _TOOLS_DIR on sys.path first)
 
 SEVERITY_WEIGHT = {"critical": 0.4, "high": 0.25, "medium": 0.15, "low": 0.05}
 
@@ -117,28 +131,84 @@ def score_response(query: str, response_text: str, tool_calls: list[str], expect
     return max(0.0, min(1.0, score))
 
 
-def build_response_metric(agent_spec) -> Callable[..., float]:
+def score_rubrics_for_response(response_text: str, expectations: dict, judge, repeats: int = 1,
+                                temperature: float = 0.0, cross_judge=None,
+                                agreement_tracker: "JudgeAgreementTracker | None" = None) -> tuple[float, list[dict]]:
+    """Judge-LM scoring of every `rubrics` question in expectations.json against one response.
+    Returns (weighted_score_in_0_1, per_rubric_detail). Costs one (or `repeats`) judge call per
+    rubric per response — see the module docstring's cost-control note before wiring this into a
+    MIPROv2 search loop rather than just the final holdout evaluation."""
+    rubrics = expectations.get("rubrics", [])
+    if not rubrics or judge is None:
+        return (1.0 if not rubrics else 0.0), []
+
+    total_weight = sum(r["weight"] for r in rubrics)
+    weighted_sum = 0.0
+    details = []
+    for r in rubrics:
+        verdict = judge_rubric_item(r["question"], r["scale"], response_text, judge,
+                                     repeats=repeats, temperature=temperature)
+        if r["scale"] == "binary":
+            unit_score = verdict.score if verdict.score is not None else 0.0
+            passed = bool(verdict.passed) and unit_score >= r.get("pass_threshold", 1)
+        else:  # likert_1_5
+            raw = verdict.score if verdict.score is not None else 1.0
+            unit_score = (raw - 1) / 4  # normalize 1-5 -> 0-1
+            passed = raw >= r.get("pass_threshold", 3)
+        weighted_sum += r["weight"] * unit_score
+        detail = {"id": r["id"], "dimension": r["dimension"], "raw_score": verdict.score,
+                   "unit_score": round(unit_score, 4), "passed": passed, "repeats": verdict.repeats}
+        if cross_judge is not None:
+            cross_verdict = judge_rubric_item(r["question"], r["scale"], response_text, cross_judge,
+                                               repeats=repeats, temperature=temperature)
+            detail["cross_judge_raw_score"] = cross_verdict.score
+            if agreement_tracker is not None:
+                if r["scale"] == "binary":
+                    agreement_tracker.add_binary(bool(verdict.passed), bool(cross_verdict.passed))
+                else:
+                    agreement_tracker.add_likert(verdict.score or 0.0, cross_verdict.score or 0.0)
+        details.append(detail)
+    return (weighted_sum / total_weight if total_weight else 1.0), details
+
+
+def build_response_metric(agent_spec, judge=None, judge_weight: float = 0.4, repeats: int = 1,
+                           temperature: float = 0.0) -> Callable[..., float]:
     """Returns a dspy-compatible metric(example, pred, trace=None) -> float, closed over one
     agent's expectations contract. `trace` is accepted and ignored (some DSPy call sites pass it
-    positionally)."""
+    positionally).
+
+    judge=None (default): pure deterministic scoring (score_response only) — zero API cost, safe
+    to use as MIPROv2's search-loop metric. Pass a JudgeBackend to additionally blend in
+    judge-scored `rubrics` at weight `judge_weight` (deterministic score gets 1-judge_weight) — do
+    this for the FINAL holdout evaluation, or for the search loop only if cost is acceptable (see
+    module docstring)."""
     expectations = agent_spec.expectations
 
     def metric(example: Any, pred: Any, trace: Any = None) -> float:
         query = getattr(example, "query", None) or example.get("query", "")
         response_text = getattr(pred, "response", None) or str(pred)
         tool_calls = get_call_log()
-        return score_response(query, response_text, tool_calls, expectations)
+        deterministic = score_response(query, response_text, tool_calls, expectations)
+        if judge is None:
+            return deterministic
+        rubric_score, _ = score_rubrics_for_response(response_text, expectations, judge,
+                                                       repeats=repeats, temperature=temperature)
+        return (1 - judge_weight) * deterministic + judge_weight * rubric_score
 
     return metric
 
 
-def instruction_level_report(instructions_text: str, expectations: dict) -> dict:
+def instruction_level_report(instructions_text: str, expectations: dict, judge=None, cross_judge=None,
+                              repeats: int = 1, temperature: float = 0.0) -> dict:
     """Thin, single-sourced wrapper around _tools/validate_candidate.py's own `validate()`, run
     against MIPROv2's final optimized instructions. Produces the exact same report shape
-    (sections / critical_failures / unjudged / blocked) that the Foundry track's CLI produces for
-    an exported Foundry candidate, so the two can sit in one comparison table without a second,
-    possibly-drifted implementation of the contract logic."""
-    return validate_instructions(expectations, instructions_text)
+    (sections / critical_failures / unjudged / blocked / primary_cross_judge_agreement) that the
+    Foundry track's `validate_candidate.py --judge-backend` CLI produces for an exported Foundry
+    candidate, so the two can sit in one comparison table without a second, possibly-drifted
+    implementation of the contract logic. judge=None preserves the original UNJUDGED-queue
+    behavior exactly."""
+    return validate_instructions(expectations, instructions_text, judge=judge, cross_judge=cross_judge,
+                                  repeats=repeats, temperature=temperature)
 
 
 def wrap_predict_with_call_log(program_call: Callable[[str], str]) -> Callable[[str], tuple[str, list[str]]]:
