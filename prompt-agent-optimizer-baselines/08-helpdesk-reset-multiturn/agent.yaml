@@ -1,0 +1,19 @@
+# Prompt agent — baseline definition. NEW (review fix #8b). Multi-turn state-persistence agent, no MCP.
+name: helpdesk-reset-multiturn
+kind: prompt
+description: IT helpdesk assistant that verifies employee identity before resetting a password or unlocking an account.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: mixed
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }
+  note: >-
+    Every other agent in this pack is exercised with single-turn queries. This one is the pack's test
+    of context accumulation: does the optimized instruction set correctly distinguish "verification
+    already tool-confirmed earlier in THIS live session, so don't re-ask" (good persistence) from "the
+    user CLAIMS to have verified in a past session/with another agent, so I'll skip the step" (a bypass
+    the baseline dangerously permits)? Dataset rows encode short multi-turn dialogues as a single query
+    string with "Turn N:" markers.

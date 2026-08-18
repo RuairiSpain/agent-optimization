@@ -1,0 +1,35 @@
+{
+  "pack": "foundry-prompt-agent-optimizer-baselines",
+  "version": "2.0.0",
+  "target": "Microsoft Foundry Agent Service — agent optimizer (preview), prompt agents",
+  "optimization_targets_supported_for_prompt_agents": ["instructions", "tools (function-calling only)", "model"],
+  "not_supported_for_prompt_agents": ["skill improvement (hosted agents only)", "MCP tool-description optimization"],
+  "changelog_ref": "CHANGELOG.md",
+  "agents": [
+    { "id": "01-travel-approval-strict", "baseline_quality": "good", "uses_mcp": false, "tools": 3, "optimize_rows": 20, "holdout_rows": 10, "tests": 9, "focus": "preservation under rewrite; boundary handling; noise-band discipline; H0 replicate #1 of 2" },
+    { "id": "02-support-triage-messy", "baseline_quality": "poor", "uses_mcp": false, "tools": 0, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "contradiction removal; buried privacy violation; hallucinated policy" },
+    { "id": "03-invoice-extractor-schema", "baseline_quality": "mixed", "uses_mcp": false, "tools": 2, "optimize_rows": 20, "holdout_rows": 10, "tests": 9, "focus": "verbatim schema preservation; schema drift; arithmetic mismatch under pressure" },
+    { "id": "04-hr-policy-mcp", "baseline_quality": "mixed", "uses_mcp": true, "tools": 2, "mcp_tools": 3, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "MCP retrieval determinism; under-specified trigger; grounding; MCP mirror #1 of 2 (under-triggering)" },
+    { "id": "05-clinical-triage-safety", "baseline_quality": "mixed", "uses_mcp": false, "tools": 2, "optimize_rows": 20, "holdout_rows": 10, "tests": 13, "focus": "red-flag list compression; verbatim compliance text; safety vs engagement rubric conflict" },
+    { "id": "06-sales-brief-underspecified", "baseline_quality": "underspecified", "uses_mcp": false, "tools": 0, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "additive optimization; invention control; optimization-model comparison" },
+    { "id": "07-incident-response-mcp", "baseline_quality": "mixed", "uses_mcp": true, "tools": 2, "mcp_tools": 3, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "MCP mirror #2 of 2 (over-triggering); prompt injection via TOOL OUTPUT; live evidence vs stale documentation", "new_in": "2.0.0" },
+    { "id": "08-helpdesk-reset-multiturn", "baseline_quality": "mixed", "uses_mcp": false, "tools": 2, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "multi-turn state persistence vs claimed prior verification; identity scope; capability honesty", "new_in": "2.0.0" },
+    { "id": "09-code-review-assistant-strict", "baseline_quality": "good", "uses_mcp": false, "tools": 3, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "H0 replicate #2 of 2 in an unrelated domain; injection via diff content", "new_in": "2.0.0" },
+    { "id": "10-expense-claim-boundary", "baseline_quality": "mixed", "uses_mcp": false, "tools": 2, "optimize_rows": 20, "holdout_rows": 10, "tests": 10, "focus": "financial fabrication guard; capability honesty; rounding and four distinct boundary-inclusivity rules", "new_in": "2.0.0" }
+  ],
+  "totals": { "agents": 10, "rows": 300, "optimize_rows": 200, "holdout_rows": 100 },
+  "layout": {
+    "<agent>/agent.yaml": "prompt agent definition",
+    "<agent>/instructions.md": "baseline system prompt (the optimizer's baseline) — never edited to 'fix' it; the flaws are the point",
+    "<agent>/tools.json": "function-calling (and, for 04/07, declared MCP) tool definitions — omitted where the agent has none",
+    "<agent>/dataset/optimize.jsonl": "20 rows — the ONLY file uploadable to the wizard/CLI for the optimization run (enforced by _tools/build_foundry_dataset.py)",
+    "<agent>/dataset/holdout.jsonl": "10 rows — never uploaded; used exclusively by the post-optimization scoring step, so reported deltas are not fit-to-what-the-optimizer-saw",
+    "<agent>/expected/expectations.json": "the expectations contract: must_have / nice_to_have / should_edit / should_remove / should_add / must_not_appear, tool rules, rubrics, agent tests (tagged optimize/holdout), scoring bands, dataset_split, judge_config, known traps",
+    "<agent>/README.md": "what this sample is designed to expose, and which review findings it was built or extended to address",
+    "_schema/expectations.schema.json": "JSON Schema (v2.0.0) for the expectations contract, including dataset_split and judge_config",
+    "_tools/validate_candidate.py": "scores an optimized candidate against its contract; refuses to run against a holdout-informed candidate; exits 1 on a critical failure; semantic rules go to an UNJUDGED queue, never silently pass",
+    "_tools/build_foundry_dataset.py": "strips authoring fields to produce a portal-ready upload from optimize.jsonl ONLY — hard-refuses holdout.jsonl by filename",
+    "_tools/similarity_baseline.py": "n-gram cosine similarity with a permutation null AND a cross-agent null baseline, plus an expectations-agreement (Jaccard) axis so lexical and substantive similarity are never conflated",
+    "_tools/run_manifest_template.json": "per-run reproducibility record — model versions, timestamps, wizard config, inference temperature — copy one per optimizer run"
+  }
+}

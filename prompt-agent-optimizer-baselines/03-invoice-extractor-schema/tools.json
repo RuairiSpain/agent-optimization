@@ -1,0 +1,31 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "lookup_supplier",
+      "description": "Looks stuff up about a supplier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "name" },
+          "country_code": { "type": "string", "description": "country" }
+        },
+        "required": ["name"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "validate_vat_number",
+      "description": "Validates a VAT number.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "vat_number": { "type": "string", "description": "the vat" }
+        },
+        "required": ["vat_number"]
+      }
+    }
+  }
+]

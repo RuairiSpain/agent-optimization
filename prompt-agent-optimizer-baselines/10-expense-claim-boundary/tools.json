@@ -1,0 +1,33 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "lookup_exchange_rate",
+      "description": "Looks up a rate.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from_currency": { "type": "string", "description": "from" },
+          "to_currency": { "type": "string", "description": "to" }
+        },
+        "required": ["from_currency", "to_currency"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "submit_expense_claim",
+      "description": "Submits a claim.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "amount_usd": { "type": "number", "description": "amount" },
+          "category": { "type": "string", "description": "category" },
+          "receipt_attached": { "type": "boolean", "description": "receipt" }
+        },
+        "required": ["amount_usd", "category", "receipt_attached"]
+      }
+    }
+  }
+]

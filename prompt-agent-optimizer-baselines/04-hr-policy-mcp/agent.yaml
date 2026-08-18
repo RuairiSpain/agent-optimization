@@ -1,0 +1,23 @@
+# Prompt agent — baseline definition. One of two MCP agents in this pack (see also 07-incident-response-mcp).
+name: hr-policy-mcp
+kind: prompt
+description: Answers employee HR policy questions, grounded in the HR knowledge base exposed over MCP.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+connections:
+  - name: hr-knowledge-base
+    kind: mcp
+    target: ${HR_KB_MCP_ENDPOINT}
+    approval_mode: never_require
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: mixed
+  uses_mcp: true
+  dataset_split: { optimize: 20, holdout: 10 }
+  note: >-
+    The agent optimizer improves descriptions for function-calling tools only. MCP tools sit outside the
+    optimizer's tool target, so the MCP retrieval behaviour must be governed by the INSTRUCTIONS. This
+    agent's baseline skews toward UNDER-specification (vague trigger, "look things up when you need to");
+    07-incident-response-mcp is the mirror agent whose baseline skews toward OVER-eager retrieval, so the
+    pack tests both directions of the same MCP-boundary problem.

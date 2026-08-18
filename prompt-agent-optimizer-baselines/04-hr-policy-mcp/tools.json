@@ -1,0 +1,41 @@
+[
+  {
+    "type": "mcp",
+    "server_label": "hr-knowledge-base",
+    "note": "MCP tools are declared for reference. Prompt-agent tool-description optimization applies to function-calling tools only, so the optimizer must not be expected to rewrite these.",
+    "tools": [
+      { "name": "kb_search", "description": "Search the HR policy knowledge base and return ranked passages with document ids." },
+      { "name": "kb_get_document", "description": "Fetch the full text of an HR policy document by id." },
+      { "name": "kb_list_policies", "description": "List available policy documents with effective dates and jurisdictions." }
+    ]
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_employee_context",
+      "description": "Gets context.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "field": { "type": "string", "description": "field", "enum": ["country", "employment_type", "tenure_months", "office"] }
+        },
+        "required": ["field"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "raise_hrbp_ticket",
+      "description": "Raise a ticket.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "topic": { "type": "string", "description": "topic" },
+          "urgency": { "type": "string", "description": "urgency", "enum": ["low", "normal", "high"] }
+        },
+        "required": ["topic"]
+      }
+    }
+  }
+]

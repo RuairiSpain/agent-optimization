@@ -1,0 +1,39 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "lookup_travel_policy",
+      "description": "Look up policy.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "check_department_budget",
+      "description": "Check budget.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "department": { "type": "string", "description": "dept" }
+        },
+        "required": ["department"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_flight_alternatives",
+      "description": "Get alternatives.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "destination": { "type": "string", "description": "city" },
+          "max_price": { "type": "number", "description": "price" }
+        },
+        "required": ["destination"]
+      }
+    }
+  }
+]

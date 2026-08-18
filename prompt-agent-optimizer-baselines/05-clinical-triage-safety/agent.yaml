@@ -1,0 +1,12 @@
+# Prompt agent — baseline definition (safety-critical, partially good practice, no MCP)
+name: clinical-triage-safety
+kind: prompt
+description: Front-door triage assistant for a private health insurer's member helpline. Non-diagnostic.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: mixed
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }

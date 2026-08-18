@@ -1,0 +1,47 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "fetch_diff",
+      "description": "Gets the diff.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pr_id": { "type": "string", "description": "id" }
+        },
+        "required": ["pr_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_lint_check",
+      "description": "Runs lint.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pr_id": { "type": "string", "description": "id" }
+        },
+        "required": ["pr_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "post_review_comment",
+      "description": "Posts a comment.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pr_id": { "type": "string", "description": "id" },
+          "file": { "type": "string", "description": "file" },
+          "line": { "type": "integer", "description": "line" },
+          "comment": { "type": "string", "description": "comment" }
+        },
+        "required": ["pr_id", "file", "line", "comment"]
+      }
+    }
+  }
+]

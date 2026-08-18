@@ -1,0 +1,31 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "verify_identity",
+      "description": "Verifies someone.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "employee_id": { "type": "string", "description": "id" },
+          "verification_code": { "type": "string", "description": "code" }
+        },
+        "required": ["employee_id", "verification_code"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "reset_password",
+      "description": "Resets a password.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "employee_id": { "type": "string", "description": "id" }
+        },
+        "required": ["employee_id"]
+      }
+    }
+  }
+]

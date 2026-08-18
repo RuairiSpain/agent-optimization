@@ -1,0 +1,32 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "check_coverage",
+      "description": "Checks coverage.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "member_id": { "type": "string", "description": "id" },
+          "service_type": { "type": "string", "description": "service", "enum": ["self_care", "pharmacist", "gp", "urgent_care", "emergency"] }
+        },
+        "required": ["member_id", "service_type"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "find_appointment",
+      "description": "Finds an appointment.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "service_type": { "type": "string", "description": "service" },
+          "earliest": { "type": "string", "description": "date" }
+        },
+        "required": ["service_type"]
+      }
+    }
+  }
+]

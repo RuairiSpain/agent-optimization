@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://internal/foundry-prompt-agent-optimizer-baselines/expectations.schema.json",
+  "title": "Prompt-agent optimizer expectations contract",
+  "description": "Validated rubric/expectations contract for a single baseline prompt agent in the foundry-prompt-agent-optimizer-baselines pack. v2.0.0: adds dataset_split, judge_config, and run_manifest_ref fields to close the train/test leakage and judge-bias gaps identified in the pack review.",
+  "type": "object",
+  "required": [
+    "agent_id", "agent_type", "uses_mcp", "baseline_quality", "purpose",
+    "optimization_targets", "dataset_split", "judge_config", "instruction_rules",
+    "rubrics", "agent_tests", "scoring", "known_traps"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "agent_id": { "type": "string" },
+    "agent_type": { "type": "string", "const": "prompt" },
+    "uses_mcp": { "type": "boolean" },
+    "baseline_quality": { "type": "string", "enum": ["good", "mixed", "poor", "underspecified"] },
+    "purpose": { "type": "string" },
+    "optimization_targets": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["instructions", "tools", "model"] }
+    },
+    "dataset_split": {
+      "type": "object",
+      "description": "FIX (leakage): declares which file the optimizer wizard/CLI is allowed to see and which is held out for independent post-optimization scoring only. build_foundry_dataset.py refuses to export anything but optimize_file.",
+      "required": ["optimize_file", "holdout_file", "optimize_rows", "holdout_rows", "leakage_note"],
+      "properties": {
+        "optimize_file": { "type": "string", "const": "dataset/optimize.jsonl" },
+        "holdout_file": { "type": "string", "const": "dataset/holdout.jsonl" },
+        "optimize_rows": { "type": "integer", "minimum": 1 },
+        "holdout_rows": { "type": "integer", "minimum": 1 },
+        "leakage_note": { "type": "string" }
+      }
+    },
+    "judge_config": {
+      "type": "object",
+      "description": "FIX (self-preference bias): pins the evaluation judge model(s) away from the optimization-model family and records the cross-judge check used to detect same-family score inflation (Zheng et al. 2023; Panickssery et al. 2024).",
+      "required": ["primary_judge_model", "cross_judge_model", "judge_family_disjoint_from_optimizer", "repeats_per_item", "agreement_metric"],
+      "properties": {
+        "primary_judge_model": { "type": "string" },
+        "cross_judge_model": { "type": "string" },
+        "judge_family_disjoint_from_optimizer": { "type": "boolean" },
+        "repeats_per_item": { "type": "integer", "minimum": 1 },
+        "agreement_metric": { "type": "string" },
+        "inference_temperature": { "type": "number", "minimum": 0, "maximum": 2 }
+      }
+    },
+    "run_manifest_ref": {
+      "type": "string",
+      "description": "FIX (reproducibility): path pattern where per-run manifests for this agent are written by the notebooks (model versions, timestamps, wizard config, temperature)."
+    },
+    "instruction_rules": {
+      "type": "object",
+      "required": ["must_have", "must_not_appear"],
+      "properties": {
+        "must_have": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+        "nice_to_have": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+        "should_edit": { "type": "array", "items": { "$ref": "#/$defs/editRule" } },
+        "should_remove": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+        "should_add": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+        "must_not_appear": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+      }
+    },
+    "tool_rules": {
+      "type": "object",
+      "properties": {
+        "immutable": { "type": "array", "items": { "type": "string" } },
+        "descriptions_should_improve": { "type": "array", "items": { "type": "string" } },
+        "disambiguation_pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tool_a", "tool_b", "expected_clarification"],
+            "properties": {
+              "tool_a": { "type": "string" },
+              "tool_b": { "type": "string" },
+              "expected_clarification": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "rubrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "dimension", "weight", "question", "scale", "pass_threshold"],
+        "properties": {
+          "id": { "type": "string" },
+          "dimension": { "type": "string" },
+          "weight": { "type": "number" },
+          "question": { "type": "string" },
+          "scale": { "type": "string", "enum": ["binary", "likert_1_5"] },
+          "pass_threshold": { "type": "number" },
+          "applies_to": { "type": "string" }
+        }
+      }
+    },
+    "agent_tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "input", "expect"],
+        "properties": {
+          "id": { "type": "string" },
+          "category": { "type": "string" },
+          "input": { "type": "string" },
+          "expect": { "type": "object" },
+          "regression_blocks": { "type": "boolean" },
+          "dataset_source": { "type": "string", "enum": ["optimize", "holdout"] }
+        }
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "required": ["baseline_expected_band", "candidate_target_band", "min_meaningful_delta", "max_instruction_growth_ratio"],
+      "properties": {
+        "baseline_expected_band": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "candidate_target_band": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "min_meaningful_delta": { "type": "number" },
+        "max_instruction_growth_ratio": { "type": "number" },
+        "max_cost_growth_ratio": { "type": "number", "description": "FIX: caps token/latency growth so a score win can't be reported without its cost trade-off." }
+      }
+    },
+    "known_traps": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "match": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["regex", "all_of_regex", "any_of_regex", "absent", "semantic"] },
+        "patterns": { "type": "array", "items": { "type": "string" } },
+        "statement": { "type": "string" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "description", "severity", "match"],
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "verbatim_required": { "type": "boolean" },
+        "match": { "$ref": "#/$defs/match" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "editRule": {
+      "type": "object",
+      "required": ["id", "current_text", "problem", "expected_change", "severity", "accept_if"],
+      "properties": {
+        "id": { "type": "string" },
+        "current_text": { "type": "string" },
+        "problem": { "type": "string" },
+        "expected_change": { "type": "string" },
+        "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "accept_if": { "$ref": "#/$defs/match" }
+      }
+    }
+  }
+}

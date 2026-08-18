@@ -1,0 +1,12 @@
+# Prompt agent — baseline definition (strict JSON output contract, no MCP)
+name: invoice-extractor-schema
+kind: prompt
+description: Extracts structured invoice data as a fixed JSON object for downstream ingestion.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: mixed
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }

@@ -1,0 +1,12 @@
+# Prompt agent — baseline definition. NEW (review fix #8d). Capability honesty + fabrication guard + numeric rounding, no MCP.
+name: expense-claim-boundary
+kind: prompt
+description: Helps Contoso employees submit expense claims that comply with the Contoso Expense Policy.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: mixed
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }

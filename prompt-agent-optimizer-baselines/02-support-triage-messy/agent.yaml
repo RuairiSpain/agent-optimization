@@ -1,0 +1,12 @@
+# Prompt agent — baseline definition (deliberately poor instruction practice, no tools, no MCP)
+name: support-triage-messy
+kind: prompt
+description: Triages inbound customer support messages for a consumer electronics retailer.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: []
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: poor
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }

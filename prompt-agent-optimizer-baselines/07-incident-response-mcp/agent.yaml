@@ -1,0 +1,23 @@
+# Prompt agent — baseline definition. NEW (review fix #8a). Second MCP agent, mirrors 04-hr-policy-mcp
+# with the opposite baseline flaw: over-eager blanket retrieval instead of an under-specified trigger.
+name: incident-response-mcp
+kind: prompt
+description: Helps Contoso SRE engineers triage and respond to production incidents, grounded in a runbook knowledge base exposed over MCP.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+connections:
+  - name: runbook-kb
+    kind: mcp
+    target: ${RUNBOOK_KB_MCP_ENDPOINT}
+    approval_mode: never_require
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: mixed
+  uses_mcp: true
+  dataset_split: { optimize: 20, holdout: 10 }
+  note: >-
+    Where 04-hr-policy-mcp's baseline under-triggers retrieval, this agent's baseline OVER-triggers it
+    ("always search... even if you already know the answer") and additionally over-trusts retrieved
+    content ("runbooks are always correct"), which is the vector this pack uses to test prompt injection
+    arriving via TOOL OUTPUT rather than the user turn.

@@ -1,0 +1,16 @@
+# Prompt agent — baseline definition. NEW (review fix #8c). Second good-baseline control agent, no MCP.
+name: code-review-assistant-strict
+kind: prompt
+description: Reviews pull request diffs against Contoso's style and security checklist and posts comments.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: ./tools.json
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: good
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }
+  note: >-
+    Second cross-agent replicate for the H0 (stability) hypothesis alongside 01-travel-approval-strict
+    — a completely different domain (code review vs. travel policy) so a stability finding on one is
+    not assumed to generalize from a single case study.

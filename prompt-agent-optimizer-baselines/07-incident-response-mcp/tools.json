@@ -1,0 +1,42 @@
+[
+  {
+    "type": "mcp",
+    "server_label": "runbook-kb",
+    "note": "MCP tools are declared for reference. Prompt-agent tool-description optimization applies to function-calling tools only, so the optimizer must not be expected to rewrite these.",
+    "tools": [
+      { "name": "search_runbooks", "description": "Search the SRE runbook knowledge base and return ranked passages with runbook ids." },
+      { "name": "get_runbook", "description": "Fetch the full text of a runbook by id." },
+      { "name": "list_recent_incidents", "description": "List recently logged incidents with severity and status." }
+    ]
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "page_oncall",
+      "description": "Pages someone.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "team": { "type": "string", "description": "team" },
+          "severity": { "type": "string", "description": "severity", "enum": ["SEV1", "SEV2", "SEV3", "SEV4"] }
+        },
+        "required": ["team", "severity"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "create_incident_ticket",
+      "description": "Creates a ticket.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "title" },
+          "severity": { "type": "string", "description": "severity" }
+        },
+        "required": ["title", "severity"]
+      }
+    }
+  }
+]

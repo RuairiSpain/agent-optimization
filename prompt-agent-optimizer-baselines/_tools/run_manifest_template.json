@@ -1,0 +1,43 @@
+{
+  "_comment": "FIX (reproducibility, review item #9). Copy this file per optimizer run and fill it in — the notebooks write one of these automatically next to each candidate's exported instructions. Foundry's optimizer is a hosted, versioned, non-deterministic service; without this record a 'Run 1 vs Run 2' comparison cannot be attributed cleanly to optimizer search stochasticity vs. silent model-version drift vs. eval-time sampling noise.",
+  "run_id": "",
+  "agent_id": "",
+  "run_label": "e.g. run1 | run2 | elected | run3",
+  "timestamp_utc": "",
+  "foundry_region": "",
+  "optimization_model": {
+    "name": "",
+    "version_id": ""
+  },
+  "eval_model": {
+    "name": "",
+    "version_id": ""
+  },
+  "wizard_config": {
+    "max_candidates": null,
+    "optimization_targets": [],
+    "compare_across_models": false
+  },
+  "dataset": {
+    "file_uploaded": "dataset/optimize.jsonl",
+    "row_count": null,
+    "sha256": ""
+  },
+  "eval_time_inference": {
+    "temperature": null,
+    "top_p": null,
+    "seed_if_supported": null,
+    "judge_model": "",
+    "judge_model_family_disjoint_from_optimizer": null
+  },
+  "outputs": {
+    "candidate_instructions_path": "",
+    "composite_score": null,
+    "per_rubric_scores": {},
+    "instruction_token_count": null,
+    "instruction_growth_ratio_vs_baseline": null,
+    "est_cost_per_call_usd": null,
+    "est_latency_ms": null
+  },
+  "notes": ""
+}

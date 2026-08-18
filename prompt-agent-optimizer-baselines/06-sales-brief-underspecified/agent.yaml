@@ -1,0 +1,12 @@
+# Prompt agent — baseline definition (deliberately underspecified, no tools, no MCP)
+name: sales-brief-underspecified
+kind: prompt
+description: Helps sales reps prepare a brief before a customer call.
+model: gpt-4.1-mini
+instructions: ./instructions.md
+tools: []
+metadata:
+  sample_family: foundry-prompt-agent-optimizer-baselines
+  baseline_quality: underspecified
+  uses_mcp: false
+  dataset_split: { optimize: 20, holdout: 10 }
