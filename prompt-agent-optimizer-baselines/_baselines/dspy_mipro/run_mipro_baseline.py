@@ -216,13 +216,21 @@ def main() -> None:
                                                  repeats=judge_repeats, temperature=judge_temperature)
 
     # `module` is guaranteed untouched by compile() (MIPROv2 deep-copies internally), so it is a
-    # valid same-pipeline, same-mocks baseline comparison point for the holdout evaluation.
+    # valid same-pipeline, same-mocks baseline comparison point for both evaluations below.
     baseline_holdout = evaluate_on_rows(module, spec.holdout_rows, spec.expectations,
                                          judge=judge, cross_judge=cross_judge,
                                          judge_weight=args.judge_weight, repeats=judge_repeats, temperature=judge_temperature)
     optimized_holdout = evaluate_on_rows(compiled, spec.holdout_rows, spec.expectations,
                                           judge=judge, cross_judge=cross_judge,
                                           judge_weight=args.judge_weight, repeats=judge_repeats, temperature=judge_temperature)
+
+    # Deterministic-only (no judge — this score must stay cheap enough to compute on every replicate
+    # run) score against MIPROv2's OWN internal val_rows slice of dataset/optimize.jsonl. This is what
+    # an elect-and-reoptimize design (see ../../docs/experiment-runbook.md Step 7) should use to pick
+    # between replicate runs — it never touches dataset/holdout.jsonl, so electing on it does not leak
+    # the split the paper's holdout numbers depend on.
+    baseline_valset = evaluate_on_rows(module, val_rows, spec.expectations)
+    optimized_valset = evaluate_on_rows(compiled, val_rows, spec.expectations)
 
     out_dir = Path(args.out_dir) / args.agent / run_label
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -280,6 +288,11 @@ def main() -> None:
             "baseline_holdout_mean_score": round(baseline_holdout["mean_score"], 4),
             "optimized_holdout_mean_score": round(optimized_holdout["mean_score"], 4),
             "holdout_delta": round(optimized_holdout["mean_score"] - baseline_holdout["mean_score"], 4),
+            "baseline_valset_mean_score": round(baseline_valset["mean_score"], 4),
+            "optimized_valset_mean_score": round(optimized_valset["mean_score"], 4),
+            "valset_note": "Deterministic-only score on val_rows, a slice of dataset/optimize.jsonl. "
+                            "Use this (never the holdout score) to elect between replicate runs in an "
+                            "elect-and-reoptimize design — see docs/experiment-runbook.md Step 7.",
             "optimized_instruction_semantic_agreement": optimized_report.get("primary_cross_judge_agreement"),
             "optimized_holdout_rubric_agreement": optimized_holdout.get("rubric_judge_agreement"),
         },

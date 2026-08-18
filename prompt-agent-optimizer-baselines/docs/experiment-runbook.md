@@ -181,12 +181,21 @@ instructions file, an instruction-level report, and a holdout evaluation, all wr
 **CLI (real run)**
 
 A single optimization run — on either track — is one draw from a stochastic search process, not a
-representative result. Run at least three, and preferably five, replicate seeds before you report a
-number:
+representative result. How many replicate seeds you need depends on what you intend to claim:
+
+- **k ≥ 3** gives a descriptive estimate (mean, standard deviation, bootstrap confidence interval).
+  Report a wide CI honestly at this scale rather than treating it as a tight estimate.
+- **k ≥ 9** is the minimum for the paired Wilcoxon signed-rank test in the paper's Section 5.6 to be
+  able to reach significance at all after Holm-Bonferroni correction across ten agents. This isn't a
+  stylistic preference: the exact test's smallest achievable two-sided p-value at k replicate pairs
+  is 2^(1−k), so at k=5 the floor is 0.0625 — no effect size, however large, can produce p < 0.05.
+  Run **k = 10** if you intend to report a Holm-corrected significance claim for any agent; at
+  k < 9, only the descriptive CI and effect size are reportable, and the paper says so explicitly
+  rather than reporting a p-value that can't mean what a p-value normally means.
 
 ```bash
 python run_all.py \
-  --agents 01-travel-approval-strict --seeds 0 1 2 3 4 \
+  --agents 01-travel-approval-strict --seeds 0 1 2 3 4 5 6 7 8 9 \
   --task-lm openai/gpt-4.1-mini --prompt-lm openai/gpt-5 --auto medium \
   --use-judge
 ```
@@ -198,13 +207,27 @@ recording each run's exact model versions and timestamp in a copy of
 service — without this record, you can't tell a genuine run-to-run difference from a silent
 model-version change between runs.
 
+Running k = 10 real optimization runs per agent, per track, is expensive — for the ten-agent pack
+that's 100 optimization runs minimum before you've compared a single alternative optimization
+target. Treat k = 10 as the bar for a significance claim you plan to publish, and k = 3–5 as
+sufficient for an exploratory pass or a CI-only report while you're still iterating on the pack
+itself.
+
 ### If you're running the elect-and-reoptimize design
 
 Some experiment designs call for electing the best of an initial pair of runs and optimizing again
-from there (see the paper's methodology section for why this needs care). If you do this:
+from there (see the paper's methodology section for why this needs care). This design has a second
+failure mode beyond the order-statistic bias the paper discusses: if you use `dataset/holdout.jsonl`
+to decide which of Run 1 / Run 2 to elect, and then also report Run 3's score on that same holdout
+split, the holdout split has leaked into a decision that shaped the final reported candidate — the
+same leakage the optimize/holdout split exists to prevent in the first place. Elect using a source
+the final report doesn't also depend on:
 
 1. Run two independent replicate seeds (Run 1, Run 2).
-2. Score both on `dataset/holdout.jsonl`, independently of each other.
+2. Score both using the internal validation score `run_mipro_baseline.py` already computes during
+   `MIPROv2.compile()` — the slice of `dataset/optimize.jsonl` held back as `--val-fraction` for
+   MIPROv2's own use, never `dataset/holdout.jsonl`. This score is already written to each run's
+   `run_manifest.json`; you don't need a separate scoring pass to get it.
 3. Elect whichever scored higher as the seed for Run 3.
 4. Run Run 3 as a fresh optimization starting from the elected candidate's instructions.
 5. When you report the result, compare Run 3 only to the elected candidate — not to Run 1 or Run 2
@@ -274,7 +297,8 @@ figure in the paper back to the exact run that produced it.
 
 ## Definition of done, per agent
 
-An agent's evaluation is complete when you have:
+An agent's evaluation is complete for a **descriptive-only** report (mean, CI, no significance
+claim) when you have:
 
 - [ ] At least 3 replicate Foundry runs, each with a saved candidate, run manifest, and validation
       report (judged, with cross-judge agreement recorded).
@@ -283,6 +307,11 @@ An agent's evaluation is complete when you have:
 - [ ] A `similarity_baseline.py` report comparing the replicate runs within each track.
 - [ ] Every gating test (`regression_blocks: true`) checked on `dataset/holdout.jsonl` for the
       winning candidate on each track, not just `dataset/optimize.jsonl`.
+
+It's complete for a **Holm-corrected Wilcoxon significance claim** (Step 7's k ≥ 9 requirement)
+only when the first four checkboxes above are satisfied at k = 10 replicate seeds per track, not 3.
+Report descriptive-only results for any agent that doesn't meet the k = 10 bar rather than reporting
+a p-value the sample size can't support — see the paper's Section 5.6 for why.
 
 Only once every agent you're reporting on meets this checklist should its numbers replace the
 placeholder tables in the paper draft (see [`paper/`](paper/)).
