@@ -46,29 +46,48 @@ release the benchmark, the scoring harness, and the DSPy baseline implementation
 Automatic prompt optimization has moved from a research technique to a shipped product feature.
 Systems that iteratively propose, evaluate, and select instruction rewrites — without gradient
 access to the underlying model — are now available as commercial, closed-loop services integrated
-directly into agent-hosting platforms. Microsoft Foundry Agent Service's agent optimizer (Microsoft,
-2026), in public preview at the time of writing, is one such system: given a baseline agent and an
-evaluation dataset, it proposes candidate instructions, tool descriptions, and model choices, scores
-each candidate, and returns the highest-scoring configuration for deployment.
+directly into agent-hosting platforms, from at least two major cloud vendors as of this writing.
+Microsoft Foundry Agent Service's agent optimizer (Microsoft, 2026), in public preview at the time
+of writing, is this paper's subject: given a baseline agent and an evaluation dataset, it proposes
+candidate instructions, tool descriptions, and model choices, scores each candidate, and returns the
+highest-scoring configuration for deployment. Amazon Bedrock AgentCore's Optimization capability
+(Amazon, 2026) ships a structurally similar recommend-evaluate-deploy loop — its own documentation
+states that batch evaluation tests each recommended change "against a defined test dataset" before a
+separate live-traffic A/B test — which is a second, independent instance of the same product
+category and the same evaluation-loop shape this paper audits, not evidence specific to one vendor.
 
-This creates a specific and under-examined risk. An optimizer that is rewarded purely for raising a
-composite evaluation score has no inherent reason to preserve properties that composite score
-doesn't measure — a safety constraint the evaluation rubric didn't happen to test, a tool-call policy
-the dataset didn't happen to exercise, a numeric business rule that a paraphrase can silently loosen
-without tripping a keyword check. The optimizer is, in effect, an unsupervised editor operating on a
-document that encodes an organization's operating policy, judged by a metric that is necessarily an
-incomplete proxy for what the organization actually wants preserved.
+This creates a specific and under-examined risk, one recent work has started to name but not yet
+audit empirically in a deployed, closed-loop product. An optimizer that is rewarded purely for
+raising a composite evaluation score has no inherent reason to preserve properties that composite
+score doesn't measure — a safety constraint the evaluation rubric didn't happen to test, a tool-call
+policy the dataset didn't happen to exercise, a numeric business rule that a paraphrase can silently
+loosen without tripping a keyword check. Wan et al. (2026) call the general version of this pattern
+*in-context reward hacking* (ICRH) — an LLM iteratively optimizing against a proxy objective in a
+way that produces side effects the objective doesn't penalize — and propose a runtime constraint
+framework to reduce it during a single agent's execution; Li et al. (2026) argue, as a position
+paper rather than an empirical study, that safety-critical constraints in LLM-based systems must be
+*maintained*, not merely asserted once, and name optimization explicitly as one of the mechanisms
+("constraint drift") through which a constraint can silently stop being operative. Both give this
+paper's concern a name and a broader research context; neither audits whether it actually occurs in
+a deployed, closed-loop instruction optimizer a paying customer can use today. The optimizer is, in
+effect, an unsupervised editor operating on a document that encodes an organization's operating
+policy, judged by a metric that is necessarily an incomplete proxy for what the organization
+actually wants preserved.
 
 Existing agent and LLM evaluation benchmarks are not built to audit this failure mode. Prompt
 optimization research (Section 2.1) evaluates optimizers on task accuracy, not on whether an
-optimizer preserves properties adversarial to its own reward signal. Agent capability benchmarks
-(Section 2.2) evaluate whether an agent can complete a task, not whether an *optimizer acting on that
-agent* preserves the agent's constraints under rewrite. Agent safety benchmarks (Section 2.3)
-evaluate a fixed agent's vulnerability to an attack, not an optimizer's tendency to *introduce or
-remove* that vulnerability while rewriting the agent it's evaluating. We are not aware of a benchmark
-that sits at this specific intersection: closed-loop optimization of an agent's instructions and
-tools, audited for preservation of safety-critical and policy-critical content under
-evaluation-driven rewrite.
+optimizer preserves properties adversarial to its own reward signal — including very recent evidence
+that optimization itself is not even reliably an accuracy *improvement*: Bai & Shi (2026) find
+prompt optimization in multi-agent systems can drop task performance by as much as 16 points, not
+only raise it, which is a different axis from ours (accuracy variance, not preservation of properties
+the accuracy metric doesn't measure) but the same underlying warning against treating "the optimizer
+ran" as evidence of "the optimizer helped." Agent capability benchmarks (Section 2.2) evaluate
+whether an agent can complete a task, not whether an *optimizer acting on that agent* preserves the
+agent's constraints under rewrite. Agent safety benchmarks (Section 2.3) evaluate a fixed agent's
+vulnerability to an attack, not an optimizer's tendency to *introduce or remove* that vulnerability
+while rewriting the agent it's evaluating. We are not aware of a benchmark that sits at this specific
+intersection: closed-loop optimization of an agent's instructions and tools, audited for preservation
+of safety-critical and policy-critical content under evaluation-driven rewrite.
 
 This paper makes three contributions:
 
@@ -132,13 +151,44 @@ optimization surface (instructions plus tool descriptions) Foundry's optimizer e
 that joint optimization outperforms optimizing either component alone on tool-selection and
 slot-filling accuracy. Neither VeRO nor JTPRO evaluates whether its optimization preserves properties
 adversarial to its own objective; both are, like the rest of this section, accuracy- or
-success-rate-improvement studies.
+success-rate-improvement studies. MAS-PromptBench (Bai & Shi, 2026) evaluates prompt optimizers for
+multi-agent systems across workflow topologies and communication protocols and reports that gains are
+inconsistent — optimization can improve performance by up to 24 points or reduce it by up to 16,
+depending on configuration; this is evidence against assuming optimization helps at all, which is a
+useful caution but, like the systems above, measured entirely on task-performance metrics, with no
+axis for whether a given change preserved a property outside those metrics.
+
+Two 2026 papers name, without empirically auditing, the specific concern this benchmark targets.
+Wan et al. (2026) introduce LLM-based Constraint Optimization (LCO) to reduce *in-context reward
+hacking* (ICRH) — their term for an LLM iteratively optimizing its own behavior against a proxy
+objective in a way that produces side effects the objective doesn't penalize — via a runtime
+self-thought module and evolutionary constraint sampling, reporting reductions in toxicity growth and
+ICRH occurrence rate on two tasks. LCO is a *mitigation* applied at a single agent's execution time,
+not an audit of any closed-loop, cross-run optimizer; we adopt ICRH as a precise name for the risk
+this paper's Introduction motivates and cite it for that reason, not as prior empirical work on the
+same system. Li et al. (2026), in a position paper rather than a benchmark, argue that safety-critical
+constraints in LLM-based multi-agent systems must be *maintained* continuously rather than asserted
+once, coining *constraint drift* for the loss, distortion, or weakening of a constraint as it passes
+through memory, delegation, communication, tool use, audit, or — explicitly named as one of their six
+mechanisms — optimization, and call for "Constraint State Governance" as a research paradigm without
+instantiating it as a measurable protocol. Their framing and ours describe the same underlying concern
+from different scopes: theirs is about a constraint's state persisting *within* a single multi-agent
+trajectory at run time, across delegation and tool use; ours is about a constraint's presence
+persisting *across* an optimizer's rewrite, between deployments, for a single agent. Read together,
+this paper is a step toward the kind of empirical instrument their call for governance implies is
+missing, scoped narrowly to the rewrite-time case and a single, real, closed-loop product rather than
+the fuller runtime-governance paradigm they propose.
 
 None of these methods report an evaluation of whether the optimizer preserves properties of the
 original prompt that are outside its own reward signal. Their evaluations are uniformly
-accuracy-improvement studies: does the optimized prompt perform better on the target task. We adopt
-the search methodology this literature describes but change the evaluation question from "did the
-score go up" to "did the score go up without silently breaking something the score didn't measure."
+accuracy-improvement (or, for LCO and the constraint-drift position paper, single-agent-execution or
+conceptual) studies, not an audit of a deployed, closed-loop, cross-run optimizer: does the optimized
+prompt perform better on the target task, does an optimizer help at all, or does a proxy objective
+get gamed during a single run. We adopt the search methodology the APO literature describes and the
+ICRH/constraint-drift vocabulary the two position-adjacent works above supply, but change the
+evaluation question from "did the score go up" to "did the score go up without silently breaking
+something the score didn't measure" — asked specifically of a real, closed-loop, cross-run optimizer
+a customer can deploy today, which none of the systems in this section ask.
 
 ### 2.2 Agent capability benchmarks
 
@@ -214,15 +264,15 @@ accompanying `README.md` and `CHANGELOG.md`) follows this template.
 
 Table 1 summarizes the gap this paper addresses.
 
-*Table 1. Coverage comparison against the closest related benchmarks and methods (a qualitative,
-author-assessed summary of publicly documented capabilities — not derived from re-running these
-systems, and distinct from the placeholder experimental data in Section 6). Every row except one
-describes a peer-reviewed or preprint academic paper, cited in References; the "Foundry agent
-optimizer" row is the sole exception, describing a commercial product's own documentation
-(Microsoft, 2026) rather than an independently reviewed or reproducible source — its cells should be
-read as "what the vendor states," not as an independently verified capability claim, which is
-exactly the asymmetry this paper's benchmark exists to let a third party check empirically instead
-of taking on trust.*
+*Table 1. Coverage comparison against the closest related benchmarks, methods, and products (a
+qualitative, author-assessed summary of publicly documented capabilities — not derived from
+re-running these systems, and distinct from the placeholder experimental data in Section 6). Rows
+describe a peer-reviewed or preprint academic paper, cited in References, with two exceptions: the
+"Foundry agent optimizer" and "Bedrock AgentCore Optimization" rows describe commercial products'
+own documentation (Microsoft, 2026; Amazon, 2026) rather than an independently reviewed or
+reproducible source — their cells should be read as "what the vendor states," not as an
+independently verified capability claim, which is exactly the asymmetry this paper's benchmark
+exists to let a third party check empirically instead of taking on trust, for either vendor.*
 
 | System | Optimizes agent instructions | Evaluates preservation under rewrite | Train/test separation for the optimizer | Evaluates indirect/tool-output injection | Evaluates an *optimizer's* effect on injection resistance | Open, reproducible |
 |---|---|---|---|---|---|---|
@@ -230,6 +280,9 @@ of taking on trust.*
 | DSPy / MIPROv2 | Yes | No | Configurable, not enforced | No | No | Yes |
 | VeRO (Ursekar et al., 2026) | Yes (harness/code, not only prompt) | No | Versioned snapshots; not an adversarial-preservation split | No | No | Yes (ICML 2026) |
 | JTPRO (Ghoshal et al., 2026) | Yes (instructions + tool schemas jointly) | No | Not specified | No | No | Not confirmed |
+| MAS-PromptBench (Bai & Shi, 2026) | No (benchmarks optimizers, doesn't optimize itself) | No (measures accuracy variance, not property preservation) | N/A | No | No | Yes |
+| LCO (Wan et al., 2026) | No (a runtime constraint framework, not an instruction optimizer) | N/A (mitigates within one execution, not across an optimizer's rewrite) | N/A | No | No | Not confirmed |
+| Constraint Drift (Li et al., 2026) | N/A (position paper; no benchmark or method released) | Argues for it, does not measure it | N/A | No | No | N/A (position paper) |
 | τ-bench | No (evaluates a fixed agent) | N/A | N/A | No | No | Yes |
 | InjecAgent | No (evaluates a fixed agent) | N/A | N/A | **Yes** | No | Yes |
 | AgentDojo (Debenedetti et al., 2024) | No (evaluates a fixed agent + defenses) | N/A | N/A | **Yes** | No | Yes |
@@ -237,6 +290,7 @@ of taking on trust.*
 | AgentSecBench (Alpay & Alpay, 2026) | No (evaluates a fixed agent) | N/A | N/A | **Yes, via a noninterference framing broader than injection alone** | No | Not confirmed |
 | ToolEmu / AgentHarm / R-Judge | No | N/A | N/A | No | No | Yes |
 | Foundry agent optimizer (this paper's subject; Microsoft, 2026) | Yes | Not documented as evaluated | Not enforced by the product | No | No | No (closed, hosted) |
+| Bedrock AgentCore Optimization (Amazon, 2026) | Yes (system prompts + tool descriptions) | Not documented as evaluated | Batch evaluation runs against "a defined test dataset"; a separate live-traffic A/B test follows, which is not the same as an enforced held-out adversarial split | No | No | No (closed, hosted) |
 | **This work** | Yes (both tracks) | **Yes** | **Enforced throughout the protocol, including the iterative-refinement condition (§5.4)** | Yes (agent 07, adapted from InjecAgent's delivery mechanism) | **Yes** | **Yes (the benchmark and the DSPy baseline; Foundry itself remains closed)** |
 
 "Not confirmed" in the rightmost column means we did not verify a code/data release for that system
@@ -332,6 +386,43 @@ impact, not for whether a given snapshot's score improvement clears a derived si
 against independent replicate attempts. This is not a claim that any of the five should have included
 one for their own research questions; it is the specific methodological gap this paper's protocol
 (Section 5) closes for the question this paper asks, which none of the five ask.
+
+### 2.8 Distinction from commercial prompt-regression-testing tooling
+
+A reader familiar with LLM-application infrastructure could reasonably ask whether this paper's
+contribution already exists as a product: platforms including Braintrust, PromptLayer, LangSmith
+(paired with the separate Promptim optimization library), Langfuse, and DeepEval all market some form
+of prompt regression testing — running a prompt change against a stored suite of test cases and
+flagging a drop before it reaches production. We rely here on these vendors' own public claims about
+their products, not an independent evaluation of them, the same evidentiary standard Table 1 applies
+to Foundry's and Bedrock AgentCore's own documentation. Two distinctions separate that category of
+tooling from this paper's contribution, and both are about what fills the test suite, not whether a
+test suite exists:
+
+1. **General-purpose regression testing checks whatever the user already put in the suite.** These
+   platforms are infrastructure: they execute a user-authored set of test cases and compare scores
+   across versions. They do not ship an adversarial dataset purpose-built to expose the specific
+   failure mode this paper targets — a baseline that already contains a subtle policy violation
+   (Section 4, agent 02), a safety rule an optimizer could plausibly extend past its intended
+   boundary (agent 05), an injection payload delivered through tool output rather than the user turn
+   (agent 07) — nor a taxonomy distinguishing what must survive a rewrite from what may legitimately
+   change (Section 4.2). A team using any of these platforms to regression-test a Foundry- or
+   Bedrock-optimized agent would still need to author that adversarial content themselves; this
+   paper's benchmark is exactly that content, designed specifically to be hard for a
+   score-maximizing optimizer to pass by accident.
+2. **General-purpose regression testing does not, by itself, enforce that the optimizer never saw
+   the test suite.** Nothing in how these platforms are marketed prevents a user from running an
+   optimizer against the same dataset the regression suite draws from — precisely the leakage this
+   paper's train/test separation (Section 4.3, 5.2) exists to rule out by construction, and precisely
+   the ambiguity in Bedrock AgentCore's own documented design (Table 1): its batch evaluation runs
+   against "a defined test dataset," and nothing in the public description states whether that
+   dataset is disjoint from whatever data informed the recommendation being tested.
+
+In short: the infrastructure pattern this paper's protocol could run on top of — a held-out suite, a
+gate before deployment — is commercially mature. What is not commercially or academically available,
+to our knowledge, is the specific adversarial dataset, gating taxonomy, and enforced-separation
+protocol needed to make that infrastructure pattern actually catch the failure mode this paper
+targets, applied to a real, closed-loop, vendor-hosted optimizer.
 
 ## 3. Why we compare against DSPy specifically
 
@@ -813,16 +904,18 @@ contains no real data yet.
 - **Citations to the academic literature in Section 2 are drawn from the authors' working knowledge
   and have not yet been independently verified against primary sources (exact venue, volume, and
   page) for this draft**, with one exception: Debenedetti et al. (2024, AgentDojo), Ursekar et al.
-  (2026, VeRO), Ghoshal et al. (2026, JTPRO), Weng et al. (2026, AgentLure/Argus), and Alpay & Alpay
-  (2026, AgentSecBench) were added in this revision after a live literature search that confirmed
+  (2026, VeRO), Ghoshal et al. (2026, JTPRO), Weng et al. (2026, AgentLure/Argus), Alpay & Alpay
+  (2026, AgentSecBench), Bai & Shi (2026, MAS-PromptBench), Wan et al. (2026, LCO), and Li et al.
+  (2026, Constraint Drift) were added in this revision after a live literature search that confirmed
   each paper's existence, arXiv identifier, and author list directly (see
   `docs/paper/publication-plan.md` §3) — specifically because an external review's citation
-  suggestions are exactly the kind of claim that can be hallucinated and should never be taken on
-  faith. The rest of Section 2, including the two
+  suggestions, and, in this pass, our own novelty-check search, are exactly the kind of claim that
+  can be hallucinated and should never be taken on faith. The rest of Section 2, including the two
   citations with the least standardized public form — Opsahl-Ott et al. (2024) for MIPROv2 and
   Panickssery et al. (2024) — still needs this same verification pass before any submission-ready
-  version. The Foundry product-documentation citation (Microsoft, 2026) likewise needs its exact URL
-  and access date confirmed by the authors before submission.
+  version. The Foundry (Microsoft, 2026) and Bedrock AgentCore (Amazon, 2026) product-documentation
+  citations likewise need their exact URLs and access dates confirmed by the authors before
+  submission.
 
 ## 9. Future work
 
@@ -892,7 +985,15 @@ Alpay, F., & Alpay, T. (2026). AgentSecBench: Measuring Prompt Injection, Privac
 Tool-Use Integrity in LLM Agents. *arXiv:2605.26269*. [Confirmed via literature search, 2026-08-18 —
 see Section 8.]
 
+Amazon. (2026). *Amazon Bedrock AgentCore: Optimization* [Product documentation, preview/general
+availability]. **[AUTHOR ACTION — before submission: confirm the exact documentation URL and access
+date; note in the surrounding text (Section 1, Table 1) that availability status may have changed
+since this literature pass.]**
+
 Andriushchenko, M., et al. (2024). AgentHarm: A Benchmark for Measuring Harmfulness of LLM Agents.
+
+Bai, J., & Shi, L. (2026). MAS-PromptBench: When Does Prompt Optimization Improve Multi-Agent LLM
+Systems? *arXiv:2606.23664*. [Confirmed via literature search, 2026-08-18 — see Section 8.]
 
 Debenedetti, E., Zhang, J., Balunović, M., Beurer-Kellner, L., Fischer, M., & Tramèr, F. (2024).
 AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents.
@@ -922,6 +1023,10 @@ Jimenez, C. E., et al. (2023). SWE-bench: Can Language Models Resolve Real-World
 Khattab, O., et al. (2023). DSPy: Compiling Declarative Language Model Calls into Self-Improving
 Pipelines.
 
+Li, T., Ma, Y., Wen, H., Huang, Z., Zhou, Q., Fu, Z., & Cheng, G. (2026). Safe Multi-Agent Behavior
+Must Be Maintained, Not Merely Asserted: Constraint Drift in LLM-Based Multi-Agent Systems.
+*arXiv:2605.10481*. [Confirmed via literature search, 2026-08-18 — see Section 8.]
+
 Liu, X., et al. (2023). AgentBench: Evaluating LLMs as Agents.
 
 Mialon, G., et al. (2023). GAIA: A Benchmark for General AI Assistants.
@@ -940,6 +1045,10 @@ Ruan, Y., et al. (2023). Identifying the Risks of LM Agents with an LM-Emulated 
 
 Ursekar, V., Shanker, A., Chatrath, V., Xue, Y., & Denton, S. (2026). VeRO: An Evaluation Harness for
 Agents to Optimize Agents. *arXiv:2602.22480*, ICML 2026. [Confirmed via literature search,
+2026-08-18 — see Section 8.]
+
+Wan, J., Chen, J., Yin, Z., Shuyuan, L., & Su, H. (2026). LCO: LLM-based Constraint Optimization for
+Safer Agentic LLMs in Real-world Tasks. *arXiv:2605.27375*. [Confirmed via literature search,
 2026-08-18 — see Section 8.]
 
 Wang, X., et al. (2023). PromptAgent: Strategic Planning with Language Models Enables
