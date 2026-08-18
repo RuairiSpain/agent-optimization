@@ -204,8 +204,12 @@ for.
 - Populate the real cost-growth-ratio numbers from Phase 0's wiring.
 
 **Phase 3 — Human calibration study (requires human raters — you and/or collaborators).**
-- Rate the stratified sample from Phase 0's protocol (target ~60–100 items).
-- Compute judge-vs-human agreement with the same machinery as judge-vs-cross-judge.
+- The stratified sample itself is already generated: `docs/paper/calibration/human_ratings_TEMPLATE.jsonl`
+  (80 items, seed 0, reproducible — see `docs/paper/calibration/README.md`). What's left is entirely
+  human work: pick a specific run, fill in `text_rated`/`human_rater_id`/`human_value` for each line,
+  optionally double-rate a subset with a second rater.
+- Compute judge-vs-human agreement with `human_calibration.py --score` (the same
+  `JudgeAgreementTracker` machinery as judge-vs-cross-judge).
 - Report alongside Table 5, with the same low-agreement caveat rule already in §5.5.
 
 **Phase 4 — Final write-up and submission.**
