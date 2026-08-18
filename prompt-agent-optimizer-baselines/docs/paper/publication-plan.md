@@ -6,7 +6,11 @@ a scoped, sequenced set of actions.
 
 **Status: Phase 0 complete** (greenlit 2026-08-18). Every §5 Phase 0 item is done — see
 `response-letters/external-journal-review.md` for the item-by-item disposition and `paper-v4.md`
-for the resulting manuscript. Phases 1-4 remain open and gated on live Foundry access (§7).
+for the resulting manuscript. A follow-up internal review (`review-round-3.md`) then checked that
+revision and found the protocol itself sound but its own revision-history bookkeeping inconsistent
+with version control (`paper-v3.md` had been edited in place instead of preserved); see
+`response-letters/round-3.md` for the correction. Phases 1-4 remain open and gated on live Foundry
+access (§7).
 
 **Framing.** The journal review's own overall assessment is the right one to anchor on: the design
 is sound and unusually rigorous for this space, but the paper is *incomplete*, not *wrong* — every

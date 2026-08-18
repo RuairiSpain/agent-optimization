@@ -6,7 +6,7 @@ Responds to an external journal review of `docs/paper/paper-v3.md`; full triage 
 `docs/paper/publication-plan.md`. All changes here are infrastructure/protocol — see that plan for
 what still needs live Foundry access, a real experimental run, or a human rater (Phases 1-3).
 
-- **Statistical fix (paper-v3.md §5.6):** the paired Wilcoxon signed-rank test used for the
+- **Statistical fix (paper-v4.md §5.6):** the paired Wilcoxon signed-rank test used for the
   cross-system (Foundry vs. DSPy) comparison was invalid — replicate seeds from the two systems
   share no randomness, so pairing them by seed index was arbitrary. Now: one-sample Wilcoxon
   signed-rank for the within-system baseline-delta claim (still valid — paired against a fixed
@@ -30,13 +30,26 @@ what still needs live Foundry access, a real experimental run, or a human rater 
   cost-growth-ratio formula (word-count-proxy tokens, the same proxy `instruction_growth_ratio`
   already used, priced against a small, dated, explicitly `verified: False` per-model rate table),
   wired into both manifest formats as `baseline_est_cost_per_call_usd` /
-  `optimized_est_cost_per_call_usd` / `est_cost_growth_ratio`. Restores paper-v3.md Table 7's cost
+  `optimized_est_cost_per_call_usd` / `est_cost_growth_ratio`. Restores paper-v4.md Table 7's cost
   column, which an earlier revision had dropped for lack of any supporting computation.
 - **`_baselines/dspy_mipro/compare_to_foundry.py`:** added `est_cost_growth_ratio` summarization for
   both tracks. Also fixed a pre-existing crash found while smoke-testing this change: `summarize()`'s
   empty-input branch used a different CI dict key (`ci95`) than its populated branch
   (`ci95_bootstrap`), and the print loop only checked the latter — it crashed on the first agent
   with zero manifests, which is the common case in any partial run.
+
+**Round 3 internal review** (`docs/paper/review-round-3.md`, `response-letters/round-3.md`) found the
+commit that produced `paper-v4.md` had also edited `paper-v3.md` in place instead of preserving it —
+`paper-v3.md` is now restored, byte-identical, from its pre-Phase-0 commit (`823e78f`), and every
+code comment / doc pointer that named `paper-v3.md` for content that now lives only in `paper-v4.md`
+was corrected accordingly (`_tools/run_manifest_template.json`, `_baselines/dspy_mipro/README.md`,
+`_baselines/dspy_mipro/compare_to_foundry.py`, `_baselines/dspy_mipro/metric.py`,
+`_baselines/dspy_mipro/score_sensitivity.py`, this file). Also fixed: Section 8's citation-list
+sentence omitted AgentDojo despite its References entry pointing there; the composite-score
+weight-sensitivity gap now has an actual Limitations/Future-work sentence instead of only existing as
+tooling; Table 7's caption no longer claims `run_manifest_template.json` "writes" a value it only
+defines a null placeholder for; Section 5.3 now states explicitly that a partial-overlap tool-call
+miss does not by itself count as a `regression_blocks`-floor "hard violation."
 
 ## 2.2.0 — shared LLM-judge layer for semantic rules and rubrics
 

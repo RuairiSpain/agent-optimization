@@ -69,7 +69,8 @@ SEVERITY_WEIGHT = {"critical": 0.4, "high": 0.25, "medium": 0.15, "low": 0.05}
 # specifically so a sensitivity/ablation analysis (see score_sensitivity.py) can perturb these
 # weights and re-score already-captured (query, response, tool_calls) logs WITHOUT reimplementing
 # score_response's logic a second time — pass a `weights` override built from this same shape.
-# Reviewer finding (round-2 external journal review, see docs/paper/publication-plan.md item #3):
+# Reviewer finding (external journal review of paper-v3.md, see docs/paper/publication-plan.md
+# item #3 — a separate review from this project's own agent-paper-reviewer skill rounds 1/2):
 # these weights were hand-tuned with no robustness check. This table is the fix's foundation, not
 # the fix itself — score_sensitivity.py is what actually runs the perturbation grid.
 DEFAULT_WEIGHTS: dict[str, Any] = {

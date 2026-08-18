@@ -46,7 +46,7 @@ produce, and a small arithmetic slip. Every blocking and suggested change is add
 |---|---|---|---|
 | 1 | Fix or scope down the "graded identically" claim for the response-level score | **Done (scoped, not built)** | We take the review's option (b): `compare_to_foundry.py` no longer silently substitutes Foundry's in-sample `outputs.composite_score` for a missing `holdout_composite_score`; it now reports the gap explicitly. §5.2, §5.3, and the Abstract are rewritten to state plainly that the shared-code guarantee currently covers the instruction-level layer only, and that Foundry's response-level holdout score requires a harness this pack does not yet build. Added to §8 Limitations and §9 Future work. |
 | 2 | Table 4's `regression_blocks`-on-holdout criterion has no data source | **Done (narrowed)** | Table 4's caption and column now report `blocked: false` only, the one criterion the pipeline actually records; the unimplemented per-test pass/fail clause is removed from the caption and listed instead as future work (§9). |
-| 3 | Table 7's cost-growth-ratio column is never computed anywhere | **Done (dropped, later implemented)** | Dropped from Table 7 in this revision's initial pass; subsequently implemented (`_tools/model_pricing.py`, wired into `run_mipro_baseline.py` and `run_manifest_template.json` — see `docs/paper/publication-plan.md` item #11) and restored to Table 7 with an explicit note that the underlying price table is unverified against live vendor pricing. |
+| 3 | Table 7's cost-growth-ratio column is never computed anywhere | **Done (dropped)** | Table 7 now reports only the instruction word-count growth ratio, the metric `run_mipro_baseline.py` actually produces. A cost-growth-ratio metric is added to §9 Future work rather than shown with no supporting code. |
 | 4 | Add a CI column to Table 8 | **Done** | Table 8's "independent replicate runs" column now reports mean ± sd and a bootstrap 95% CI, matching what §7's own interpretive bullet asks the reader to check the Run 3 score against. |
 | 5 | Add the partial-overlap tool-call penalty term to §5.3's formula | **Done** | §5.3 now states the `-0.1` per-missing-tool partial-overlap penalty alongside the full-miss and forbidden-call terms. |
 | 6 | Correct §4.2's "mean 10.3" | **Done** | Corrected to the directly-recomputed mean of 10.1 (totals 9, 10, 9, 10, 13, 10, 10, 10, 10, 10 across the ten agents). |
@@ -172,20 +172,6 @@ optimizer (Opsahl-Ott et al., 2024) performs Bayesian-optimization-guided joint 
 instruction and demonstration candidates, closely mirroring the multi-component (instructions, tool
 descriptions, model choice) search space Foundry's optimizer exposes (Microsoft, 2026).
 
-Two very recent (2026) systems sit closer to Foundry's own framing of an agent-optimizing-agent loop
-than the methods above. VeRO (Ursekar et al., 2026) evaluates coding agents that iteratively edit and
-re-evaluate a target agent's *harness* — not only its prompt — under versioned snapshots and
-budget-controlled evaluation; its headline empirical finding is that current optimizers, even when
-free to edit code, default to prompt-only modifications with limited diversity and impact, which is
-directly relevant context for interpreting whatever a closed, prompt-focused optimizer like
-Foundry's produces. JTPRO (Ghoshal et al., 2026) jointly optimizes an agent's global instructions and
-its per-tool schema/argument descriptions via rollout-driven reflection — the same two-part
-optimization surface (instructions plus tool descriptions) Foundry's optimizer exposes — and reports
-that joint optimization outperforms optimizing either component alone on tool-selection and
-slot-filling accuracy. Neither VeRO nor JTPRO evaluates whether its optimization preserves properties
-adversarial to its own objective; both are, like the rest of this section, accuracy- or
-success-rate-improvement studies.
-
 None of these methods report an evaluation of whether the optimizer preserves properties of the
 original prompt that are outside its own reward signal. Their evaluations are uniformly
 accuracy-improvement studies: does the optimized prompt perform better on the target task. We adopt
@@ -212,28 +198,14 @@ al., 2023) simulates tool execution to surface unsafe agent behavior without req
 side effects. R-Judge (Yuan et al., 2024) evaluates an LLM's ability to *recognize* risk in an agent
 trajectory. InjecAgent specifically evaluates **indirect** injection — malicious content arriving
 through tool observations rather than the user's own turn — on a fixed agent, which is the same
-delivery mechanism our agent 07 (Section 4) uses. AgentDojo (Debenedetti et al., 2024) extends this
-line with a dynamic environment for evaluating prompt-injection attacks *and* defenses together
-against tool-integrated agents across realistic task suites, again on a fixed agent under test.
-AgentLure (introduced within Argus; Weng et al., 2026) sharpens the threat model further: it
-specifically targets *context-dependent* tasks and *context-aware* attacks, arguing that
-context-insensitive injection benchmarks understate risk because a real adversary adapts its attack
-to the agent's current context rather than injecting a fixed payload — a distinction relevant to how
-representative agent 07's fixed injection patterns are of an adaptive attacker, which we note as a
-limitation (Section 8). AgentSecBench (Alpay & Alpay, 2026) reframes this family of concerns more
-formally, as noninterference between untrusted observations and a protected output or action
-predicate under three "games" (instruction-integrity, retrieval-confidentiality,
-capability-integrity) — a stricter, more general property than the pattern-match checks our own
-`must_not_appear`/tool-call-policy scoring uses, and a plausible direction for tightening agent 07's
-injection-resistance check in future work (Section 9). Our contribution at this intersection is
-therefore narrower and more specific than "tests injection via tool output" in isolation: we are not
-aware of prior work evaluating whether a closed-loop *optimizer*, rewriting an agent's instructions
-under an evaluation-score objective, preserves, weakens, or repairs an agent's resistance to this
-class of injection. InjecAgent, AgentDojo, AgentLure/Argus, AgentSecBench, and the other benchmarks
-in this subsection test a fixed agent (or a fixed agent plus a fixed defense) against an attack; our
-benchmark tests whether an automated rewrite process changes that agent's resistance to the same
-class of attack, which is a distinct question the injection-benchmark literature does not address
-because it does not evaluate an optimizer at all.
+delivery mechanism our agent 07 (Section 4) uses. Our contribution at this intersection is therefore
+narrower and more specific than "tests injection via tool output" in isolation: we are not aware of
+prior work evaluating whether a closed-loop *optimizer*, rewriting an agent's instructions under an
+evaluation-score objective, preserves, weakens, or repairs an agent's resistance to this class of
+injection. InjecAgent and the other benchmarks in this subsection test a fixed agent against an
+attack; our benchmark tests whether an automated rewrite process changes that agent's resistance to
+the same class of attack, which is a distinct question the injection-benchmark literature does not
+address because it does not evaluate an optimizer at all.
 
 ### 2.4 LLM-as-judge and evaluation methodology
 
@@ -251,13 +223,10 @@ measure, rather than assume away, this bias.
 Dietterich (1998) established that naive significance testing over a single train/test split
 systematically understates variance for learned systems, motivating replicate-run designs over
 single-draw comparisons. Demšar (2006) extends this to comparisons across multiple datasets,
-recommending non-parametric tests (Wilcoxon signed-rank for paired comparisons, Mann-Whitney U for
-independent samples) and correction for multiple comparisons (Holm's method) over the more commonly
-misapplied paired t-test — we adopt this test family in Section 5.6, applying the paired variant only
-where the compared samples are genuinely paired and the independent-samples variant where they are
-not, along with the sample-size consequence of that choice for each, which the cited methodology
-papers do not by themselves make salient and which we derive explicitly for this benchmark's setting.
-Gebru et
+recommending non-parametric tests (Wilcoxon signed-rank) and correction for multiple comparisons
+(Holm's method) over the more commonly misapplied paired t-test — both of which we adopt in Section
+5.6, along with the sample-size consequence of that choice, which the cited methodology papers do
+not by themselves make salient and which we derive explicitly for this benchmark's setting. Gebru et
 al. (2018; revised 2021) introduce datasheets for datasets as a standard for documenting a dataset's
 provenance, composition, and intended use; our benchmark's documentation (Section 4, and the
 accompanying `README.md` and `CHANGELOG.md`) follows this template.
@@ -268,31 +237,17 @@ Table 1 summarizes the gap this paper addresses.
 
 *Table 1. Coverage comparison against the closest related benchmarks and methods (a qualitative,
 author-assessed summary of publicly documented capabilities — not derived from re-running these
-systems, and distinct from the placeholder experimental data in Section 6). Every row except one
-describes a peer-reviewed or preprint academic paper, cited in References; the "Foundry agent
-optimizer" row is the sole exception, describing a commercial product's own documentation
-(Microsoft, 2026) rather than an independently reviewed or reproducible source — its cells should be
-read as "what the vendor states," not as an independently verified capability claim, which is
-exactly the asymmetry this paper's benchmark exists to let a third party check empirically instead
-of taking on trust.*
+systems, and distinct from the placeholder experimental data in Section 6).*
 
 | System | Optimizes agent instructions | Evaluates preservation under rewrite | Train/test separation for the optimizer | Evaluates indirect/tool-output injection | Evaluates an *optimizer's* effect on injection resistance | Open, reproducible |
 |---|---|---|---|---|---|---|
 | APE / OPRO / EvoPrompt / PromptBreeder | Yes | No | Not specified | No | No | Yes |
 | DSPy / MIPROv2 | Yes | No | Configurable, not enforced | No | No | Yes |
-| VeRO (Ursekar et al., 2026) | Yes (harness/code, not only prompt) | No | Versioned snapshots; not an adversarial-preservation split | No | No | Yes (ICML 2026) |
-| JTPRO (Ghoshal et al., 2026) | Yes (instructions + tool schemas jointly) | No | Not specified | No | No | Not confirmed |
 | τ-bench | No (evaluates a fixed agent) | N/A | N/A | No | No | Yes |
 | InjecAgent | No (evaluates a fixed agent) | N/A | N/A | **Yes** | No | Yes |
-| AgentDojo (Debenedetti et al., 2024) | No (evaluates a fixed agent + defenses) | N/A | N/A | **Yes** | No | Yes |
-| AgentLure / Argus (Weng et al., 2026) | No (evaluates a fixed agent + a defense) | N/A | N/A | **Yes (context-aware, not fixed-payload)** | No | Not confirmed |
-| AgentSecBench (Alpay & Alpay, 2026) | No (evaluates a fixed agent) | N/A | N/A | **Yes, via a noninterference framing broader than injection alone** | No | Not confirmed |
 | ToolEmu / AgentHarm / R-Judge | No | N/A | N/A | No | No | Yes |
 | Foundry agent optimizer (this paper's subject; Microsoft, 2026) | Yes | Not documented as evaluated | Not enforced by the product | No | No | No (closed, hosted) |
 | **This work** | Yes (both tracks) | **Yes** | **Enforced throughout the protocol, including the iterative-refinement condition (§5.4)** | Yes (agent 07, adapted from InjecAgent's delivery mechanism) | **Yes** | **Yes (the benchmark and the DSPy baseline; Foundry itself remains closed)** |
-
-"Not confirmed" in the rightmost column means we did not verify a code/data release for that system
-as part of this literature pass (Section 8) — it is not a claim that the work is closed.
 
 ## 3. Why we compare against DSPy specifically
 
@@ -512,54 +467,22 @@ judge-dependent portion of that agent's score is sensitive to which judge happen
 
 ### 5.6 Statistical analysis plan
 
-This benchmark's replicate-run design (Section 5.4) supports two distinct comparisons, and — unlike
-an earlier draft of this paper — we now use a different test for each, because they differ in
-whether the compared samples are meaningfully paired.
+For each agent, we compare the holdout-score distributions of the Foundry track and the DSPy track
+using a paired Wilcoxon signed-rank test (appropriate for the small, non-normality-guaranteed
+replicate-run sample sizes this design produces, following Demšar, 2006), report the rank-biserial
+effect size alongside the p-value, and apply Holm-Bonferroni correction across the family of
+per-agent comparisons before treating any single comparison as significant at α = 0.05.
 
-**Within-system: did optimization move the score relative to baseline?** Each agent's baseline
-score is a single fixed value (the unoptimized instructions, evaluated once — there is no replicate
-baseline). Testing whether the k replicate *optimized* holdout scores differ from that one fixed
-reference is a **one-sample Wilcoxon signed-rank test** applied to the k differences
-`optimized_i − baseline`: each difference is validly paired against the same constant, so the usual
-non-normality-tolerant properties of the signed-rank test (Demšar, 2006) apply cleanly here. The
-exact smallest achievable two-sided p-value for this test at k non-tied observations is 2^(1−k); at
-k = 5 that floor is 0.0625, so no effect size can reach p < 0.05 below that sample size, and after
-Holm-Bonferroni correction across ten agents the strictest comparison in the family must clear
-α/10 = 0.005, which requires 2^(1−k) ≤ 0.005, i.e., k ≥ 9.
-
-**Cross-system: does Foundry's optimized-score distribution differ from DSPy's?** This compares two
-*independent* samples of k replicate holdout scores each — one system's replicate seeds share no
-randomness with the other's, so there is no principled way to pair "Foundry seed 3" with "DSPy seed
-3." An earlier draft of this paper used a paired Wilcoxon signed-rank test for this comparison
-anyway, pairing runs by seed index; an external review correctly identified this as invalid, since
-an arbitrary pairing can distort the test's power in either direction. We instead use the
-**Mann-Whitney U test** (equivalently, the unpaired Wilcoxon rank-sum test), the standard
-non-parametric test for two independent samples, and report the common-language effect size (the
-probability that a randomly drawn Foundry run outscores a randomly drawn DSPy run) alongside the
-p-value. This test family has its own exact sample-size floor, which we derive the same way: for two
-independent samples of equal size n with no ties, the single most extreme rank arrangement (every
-observation in one sample outranking every observation in the other) has probability `1 / C(2n, n)`
-under the null, so the smallest achievable two-sided p-value is `2 / C(2n, n)`. Concretely:
-
-| n per system | C(2n, n) | Min. two-sided p | Clears Holm α/10 = 0.005 (10 agents)? |
-|---|---|---|---|
-| 5 | 252 | 0.0079 | No |
-| **6** | 924 | **0.0022** | **Yes** |
-| 7 | 3,432 | 0.0006 | Yes |
-| 10 | 184,756 | 0.000011 | Yes |
-
-This is a direct, favorable consequence of using the correct test: the mathematical floor for a
-reportable Holm-corrected cross-system claim drops from k ≥ 9 (under the invalid paired test) to
-**k ≥ 6** per system. We nonetheless run **k = 10** replicate seeds per agent-system pair as the
-primary design, since the floor above only establishes that significance is *possible*, not that a
-given real effect size will be *powered* to reach it — k = 10 gives real headroom beyond the bare
-minimum. Where cost genuinely constrains a pair to fewer replicate seeds, k = 6 remains the reportable
-floor for this test (unlike k < 9 under the old, invalid design, which could never have reported
-significance at all regardless of the true effect), and we report only descriptive statistics,
-stating plainly that no significance claim is made, for any pair below that floor. In every case we
-report the bootstrap confidence interval and effect size — which degrade gracefully at any k, unlike
-a p-value against a fixed threshold — as the primary evidence, with the significance test as a
-secondary, correction-aware summary on top of it. We treat a composite-score delta smaller than each
+This test family has a sample-size floor that is easy to overlook and that we state explicitly
+rather than discover after running the experiment: the exact paired Wilcoxon signed-rank test's
+smallest achievable two-sided p-value at k non-tied replicate pairs is 2^(1−k). At k = 5, that floor
+is 0.0625 — no effect size, however large, can produce p < 0.05 at that sample size. After
+Holm-Bonferroni correction across ten agents, the most significant comparison in the family must
+clear α/10 = 0.005 to register at all, which requires 2^(1−k) ≤ 0.005, i.e., k ≥ 9. We therefore run
+**k = 10** replicate seeds per agent-system pair for every comparison this paper reports a
+significance test for, and report the bootstrap confidence interval and rank-biserial effect size —
+which degrade gracefully at smaller k, unlike a p-value against a fixed threshold — as the primary
+evidence at any sample size below that bar. We treat a composite-score delta smaller than each
 agent's pre-registered `min_meaningful_delta` (recorded in `expected/expectations.json`, derived from
 the expected noise band of that agent's baseline; see `docs/agent-evaluation-guide.md`) as
 within-noise regardless of nominal statistical significance — a large enough sample can render a
@@ -579,18 +502,17 @@ look interesting.
 ### 6.1 Primary comparison: holdout composite score by agent and system
 
 *Table 3 (ILLUSTRATIVE — PLACEHOLDER). Mean holdout composite score ± bootstrap 95% CI across k=10
-replicate seeds, with the Holm-corrected Mann-Whitney U p-value for the cross-system (Foundry vs.
-DSPy) comparison (Section 5.6). Two of ten agent rows are shown; the full table will report all ten.
-The "Foundry (optimized)" column shown here is illustrative of the intended format only: as of this
-draft, no harness exists that scores an exported Foundry candidate's real holdout responses with the
-shared `score_response` function (Section 5.3), so this column cannot yet be populated with a real,
-holdout-only, shared-code number — building that harness is this paper's most important open
-prerequisite for reporting real results (Section 8, Section 9).*
+replicate seeds, with the Holm-corrected paired Wilcoxon p-value. Two of ten agent rows are shown;
+the full table will report all ten. The "Foundry (optimized)" column shown here is illustrative of
+the intended format only: as of this draft, no harness exists that scores an exported Foundry
+candidate's real holdout responses with the shared `score_response` function (Section 5.3), so this
+column cannot yet be populated with a real, holdout-only, shared-code number — building that harness
+is this paper's most important open prerequisite for reporting real results (Section 8, Section 9).*
 
-| Agent | Baseline | Foundry (optimized) | DSPy MIPROv2 (optimized) | Mann-Whitney p (Holm-corrected) | Common-language effect size |
+| Agent | Baseline | Foundry (optimized) | DSPy MIPROv2 (optimized) | Wilcoxon p (Holm-corrected) | Rank-biserial effect size |
 |---|---|---|---|---|---|
-| 01 travel-approval-strict | 0.81 | 0.84 ± 0.03 [PLACEHOLDER] | 0.83 ± 0.04 [PLACEHOLDER] | 0.62 [PLACEHOLDER] | 0.54 [PLACEHOLDER] |
-| 02 support-triage-messy | 0.41 | 0.79 ± 0.06 [PLACEHOLDER] | 0.74 ± 0.08 [PLACEHOLDER] | 0.04 [PLACEHOLDER] | 0.71 [PLACEHOLDER] |
+| 01 travel-approval-strict | 0.81 | 0.84 ± 0.03 [PLACEHOLDER] | 0.83 ± 0.04 [PLACEHOLDER] | 0.62 [PLACEHOLDER] | 0.11 [PLACEHOLDER] |
+| 02 support-triage-messy | 0.41 | 0.79 ± 0.06 [PLACEHOLDER] | 0.74 ± 0.08 [PLACEHOLDER] | 0.04 [PLACEHOLDER] | 0.58 [PLACEHOLDER] |
 
 *(Rows for agents 03–10 omitted from this draft in the same illustrative format; the real results
 section will report all ten, each backed by k=10 replicate runs per system.)*
@@ -639,25 +561,20 @@ shown here, the full table will report the distribution across all 45.*
 |---|---|---|---|
 | Foundry run 1 vs. run 2 (agent 01) | 0.58 [PLACEHOLDER] | 0.11 ± 0.02 [PLACEHOLDER] | 0.06 ± 0.03 [PLACEHOLDER] |
 
-### 6.5 Instruction and cost growth
+### 6.5 Instruction growth
 
 *Table 7 (ILLUSTRATIVE — PLACEHOLDER). Mean instruction word-count growth ratio
-(`instruction_growth_ratio_words_approx`) and estimated cost growth ratio (`est_cost_growth_ratio`,
-optimized vs. baseline) across k=10 replicate seeds, against each agent's pre-registered
-`max_instruction_growth_ratio` bound. A prior revision of this paper dropped the cost column because
-nothing in this pack computed a cost-growth-ratio for either track; `_tools/model_pricing.py` now
-implements that formula (a word-count-proxy token estimate, the same proxy the instruction-growth
-column already uses, priced against a small, dated, explicitly **unverified** per-model rate table —
-see the module's own `[AUTHOR ACTION]` notes) and both `run_mipro_baseline.py` and
-`run_manifest_template.json` write `est_cost_growth_ratio` into every run's manifest. The column is
-restored here as a matter of what the pipeline can now compute; the numbers below remain placeholders
-like everything else in this section, and the underlying price table still needs verifying against
-each vendor's live pricing page before a real cost figure is reported (Section 8).*
+(`instruction_growth_ratio_words_approx`, optimized vs. baseline) across k=10 replicate seeds,
+against each agent's pre-registered `max_instruction_growth_ratio` bound. An earlier draft of this
+table also promised an "estimated cost growth ratio" column; no script in this pack computes a
+cost-growth-ratio for either track (the Foundry manifest's `est_cost_per_call_usd` field is unused,
+and the DSPy manifest has no cost field at all), so that column is dropped here rather than shown
+with no supporting data — see Section 9 for this as a future-work item.*
 
-| Agent | Foundry instr. growth | DSPy instr. growth | Foundry est. cost growth | DSPy est. cost growth | Agent's stated bound |
-|---|---|---|---|---|---|
-| 01 travel-approval-strict | 1.4× [PLACEHOLDER] | 1.5× [PLACEHOLDER] | 1.3× [PLACEHOLDER] | 1.4× [PLACEHOLDER] | 1.6× (instr.) / 1.5× (cost) |
-| 06 sales-brief-underspecified | 8.2× [PLACEHOLDER] | 6.7× [PLACEHOLDER] | 7.1× [PLACEHOLDER] | 5.9× [PLACEHOLDER] | 30× (instr.) / 25× (cost) — deliberately loose; see `docs/agent-evaluation-guide.md` |
+| Agent | Foundry instruction growth ratio | DSPy instruction growth ratio | Agent's stated bound |
+|---|---|---|---|
+| 01 travel-approval-strict | 1.4× [PLACEHOLDER] | 1.5× [PLACEHOLDER] | 1.6× |
+| 06 sales-brief-underspecified | 8.2× [PLACEHOLDER] | 6.7× [PLACEHOLDER] | 30× — deliberately loose; see `docs/agent-evaluation-guide.md` |
 
 ### 6.6 Iterative refinement condition
 
@@ -694,14 +611,12 @@ contains no real data yet.
 - Table 6 is descriptive, not confirmatory on its own — a cosine similarity number is only
   interpretable relative to its two null baselines, and should always be read alongside the
   `expectations_agreement` axis (Section 5.3), not as a stand-alone similarity claim.
-- Table 7 should be read as the instruction-length and estimated-dollar cost the optimizer spent to
-  achieve whatever delta Table 3 shows for the same agent — a score improvement that costs growth
-  beyond either of the agent's two pre-registered bounds (`max_instruction_growth_ratio`,
-  `max_cost_growth_ratio`) is a trade-off to weigh deliberately, not a clean win, regardless of the
-  sign of the Table 3 delta. Both growth-ratio columns are word-count-proxy estimates, not precise
-  measurements (Section 8) — read the ratio as directionally informative, and treat the underlying
-  absolute dollar figures as order-of-magnitude only until the price table they're computed from is
-  verified against each vendor's live pricing page.
+- Table 7 should be read as an instruction-length cost the optimizer spent to achieve whatever delta
+  Table 3 shows for the same agent — a score improvement that costs instruction growth beyond the
+  agent's pre-registered bound is a trade-off to weigh deliberately, not a clean win, regardless of
+  the sign of the Table 3 delta. This is a word-count proxy for cost, not a cost measurement itself
+  (Section 8); a real cost-growth-ratio metric (Section 9) would let this trade-off be stated in
+  dollars or latency rather than words alone.
 - Table 8's iterative-refinement score should be read only in relation to the *distribution* column
   in the same table, never against Run 1 or Run 2 individually (Section 5.4); if it falls within
   that distribution's confidence interval, that is evidence the re-optimization step did not
@@ -715,9 +630,8 @@ contains no real data yet.
   DSPy only; producing a genuinely comparable Foundry number requires a harness that runs an
   exported/deployed candidate against `dataset/holdout.jsonl` and scores its real responses and tool
   calls, which this pack does not yet build. Until it exists, Table 3's Foundry column — and the
-  cross-system Mann-Whitney test and effect size computed from it (Section 5.6) — cannot be reported
-  as real data; `Section 9` lists this as the paper's single highest-priority remaining
-  infrastructure gap.
+  Wilcoxon test and effect size computed from it — cannot be reported as real data; `Section 9` lists
+  this as the paper's single highest-priority remaining infrastructure gap.
 - **Foundry is a closed, versioned, non-deterministic hosted service.** We cannot guarantee that two
   runs separated in time used an identical underlying model version, and the platform's internal
   search algorithm is not published, so any structural comparison to the methods in Section 2.1 is
@@ -725,53 +639,30 @@ contains no real data yet.
 - **A single open baseline (DSPy MIPROv2) is one comparison point**, not a claim that Foundry's
   optimizer is better or worse than automatic prompt optimization broadly; Section 3 states the
   specific, narrow reasons for this choice.
-- **The k = 10 replicate-seed target (Section 5.6) is expensive**: for the full ten-agent pack across
-  both systems, that is 200 optimization runs at full scale, and more again for any additional
-  optimization target compared in the future. The cross-system Mann-Whitney test's mathematical floor
-  is actually k ≥ 6 per system, not k ≥ 10 (Section 5.6) — so a budget-constrained run can fall back
-  to k = 6–7 for a specific agent-system pair and still, in principle, report a real Holm-corrected
-  significance claim for it, unlike under the paired test an earlier draft of this paper used, which
-  could never reach significance below k = 9 regardless of the effect size. We still target k = 10
-  as the primary design for the statistical power this floor alone does not guarantee, and consider
-  the cost of doing so an honest cost of the standard we hold ourselves to, not a flaw to work around
-  by lowering k and reporting a p-value that sample size cannot support.
+- **The k = 10 replicate-seed requirement for a significance claim (Section 5.6) is expensive**: for
+  the full ten-agent pack across both systems, that is 200 optimization runs before a single
+  significance claim is reportable, and more again for any additional optimization target compared
+  in the future. We consider this an honest cost of the statistical standard we hold ourselves to,
+  not a flaw to work around by lowering k and reporting a p-value that sample size cannot support.
 - **The two MCP agents are evaluated on an instructions-and-function-tools-only basis in the DSPy
   track**, since no production MCP server exists in this repository to call for real; this is stated
   plainly in the benchmark's own documentation and any DSPy-vs-Foundry delta on those two agents
   should not be read as a like-for-like MCP-retrieval comparison.
-- **Agent 07's injection patterns are fixed, not context-aware.** AgentLure (Section 2.3) argues that
-  a context-insensitive injection benchmark understates real risk because a genuine adversary adapts
-  its attack to the agent's current context rather than injecting a fixed payload. Agent 07's
-  tool-output injection tests (Section 4) are fixed patterns, rephrased between the optimizer-visible
-  and held-out splits (Section 4.3) but not adaptive to the candidate instructions under test; a
-  sufficiently context-aware attacker could plausibly evade them in a way an optimizer's rewrite would
-  not be credited or penalized for. Section 9 lists tightening this toward AgentSecBench's
-  noninterference framing as a direction for closing this gap.
-- **The cost-growth-ratio metric (`_tools/model_pricing.py`, Table 7) is a word-count-proxy estimate
-  priced against an explicitly unverified rate table**, not a measurement against real billed usage.
-  Every entry in `model_pricing.PRICE_TABLE` is tagged `verified: False` and must be checked against
-  each vendor's current pricing page before a real cost figure from it is reported; the *ratio* is
-  more defensible than the *absolute dollar figure* it's derived from, since the same word-count
-  proxy applies to both the baseline and optimized side and much of its bias cancels, but neither
-  should be read as a precise, billable cost. Both manifest formats now record per-call cost
-  estimates and the growth ratio computed from them; verifying the underlying rates is the remaining
-  gap, not the wiring itself.
+- **No cost-growth-ratio metric is implemented for either track.** Table 7 reports only an
+  instruction word-count growth ratio, a proxy for cost, not a measurement of it; neither manifest
+  format in this pack currently records token counts, latency, or a per-model price table from which
+  a real cost ratio could be computed.
 - **The judge layer's deterministic-only fallback path was smoke-tested with a heuristic stub judge
   that has no real language understanding**; every real judged number in this paper depends on
   actual judge-model calls, and the stub path exists only to validate that the code executes, never
   as a source of reportable data.
 - **Citations to the academic literature in Section 2 are drawn from the authors' working knowledge
   and have not yet been independently verified against primary sources (exact venue, volume, and
-  page) for this draft**, with one exception: Ursekar et al. (2026, VeRO), Ghoshal et al. (2026,
-  JTPRO), Weng et al. (2026, AgentLure/Argus), and Alpay & Alpay (2026, AgentSecBench) were added in
-  this revision after a live literature search that confirmed each paper's existence, arXiv
-  identifier, and author list directly (see `docs/paper/publication-plan.md` §3) — specifically
-  because an external review's citation suggestions are exactly the kind of claim that can be
-  hallucinated and should never be taken on faith. The rest of Section 2, including the two
-  citations with the least standardized public form — Opsahl-Ott et al. (2024) for MIPROv2 and
-  Panickssery et al. (2024) — still needs this same verification pass before any submission-ready
-  version. The Foundry product-documentation citation (Microsoft, 2026) likewise needs its exact URL
-  and access date confirmed by the authors before submission.
+  page) for this draft.** This is a heavier caveat for the two citations with the least standardized
+  public form among those used here — Opsahl-Ott et al. (2024) for MIPROv2 and Panickssery et al.
+  (2024) — and must be resolved before any submission-ready version. The Foundry product-
+  documentation citation added in this revision (Microsoft, 2026) likewise needs its exact URL and
+  access date confirmed by the authors before submission.
 
 ## 9. Future work
 
@@ -779,26 +670,15 @@ contains no real data yet.
   script that takes an exported/deployed Foundry candidate, runs it against every item in
   `dataset/holdout.jsonl`, captures its real responses and tool calls, and scores them with the same
   `score_response` function the DSPy track already uses end-to-end. This is the single prerequisite
-  every other number in Table 3 — including the cross-system Mann-Whitney test and effect size —
-  depends on before it
+  every other number in Table 3 — including the Wilcoxon test and effect size — depends on before it
   can be reported as real rather than illustrative.
 - Implement a per-test, recorded pass/fail signal for `regression_blocks` agent_tests on the
   held-out split (rather than only the implicit 0.15-floor effect inside the continuous
   response-level score), so Table 4 can report the full gating definition an earlier draft of its
   caption promised, not only `blocked: false`.
-- Verify `_tools/model_pricing.PRICE_TABLE`'s rates against each vendor's live pricing page (every
-  entry is currently tagged `verified: False`), and replace the word-count token proxy with a real
-  tokenizer count, so Table 7's cost-growth-ratio column can be reported as a measured figure rather
-  than an order-of-magnitude estimate — a latency-growth-ratio metric alongside it (using each
-  manifest's already-present but still-unused `est_latency_ms` field) is a natural extension once
-  real runs produce a real latency number to record there.
-- **Tighten agent 07's injection-resistance check toward a noninterference property**, in the spirit
-  of AgentSecBench's (Section 2.3) instruction-integrity/retrieval-confidentiality/
-  capability-integrity games: instead of pattern-matching whether a specific injected instruction's
-  effect appears in the response, test whether the candidate's protected output changes when an
-  untrusted observation changes while the trusted instruction and authorized content are held fixed
-  — a stricter, more general property than the current `must_not_appear`/tool-call-policy checks, and
-  one that would also partly address the fixed-vs-context-aware attack gap noted in Section 8.
+- Implement a real cost-growth-ratio metric (token counts and a per-model price table, or measured
+  latency) for both tracks, so Table 7 can report the cost dimension its caption originally promised
+  rather than an instruction word-count proxy alone.
 - Extend the benchmark past the current ten agents with a held-back, unpublished evaluation slice —
   released only after the public benchmark has had time to be used, to guard against the
   contamination risk any published, well-known benchmark eventually faces once its items may appear
@@ -834,16 +714,7 @@ continued access to any one commercial product.
 
 ## References
 
-Alpay, F., & Alpay, T. (2026). AgentSecBench: Measuring Prompt Injection, Privacy Leakage, and
-Tool-Use Integrity in LLM Agents. *arXiv:2605.26269*. [Confirmed via literature search, 2026-08-18 —
-see Section 8.]
-
 Andriushchenko, M., et al. (2024). AgentHarm: A Benchmark for Measuring Harmfulness of LLM Agents.
-
-Debenedetti, E., Zhang, J., Balunović, M., Beurer-Kellner, L., Fischer, M., & Tramèr, F. (2024).
-AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents.
-*NeurIPS Datasets and Benchmarks Track*. [Confirmed via literature search, 2026-08-18 — see Section
-8.]
 
 Demšar, J. (2006). Statistical Comparisons of Classifiers over Multiple Data Sets. *Journal of
 Machine Learning Research*.
@@ -854,11 +725,6 @@ Learning Algorithms. *Neural Computation*.
 Fernando, C., et al. (2023). Promptbreeder: Self-Referential Self-Improvement via Prompt Evolution.
 
 Gebru, T., et al. (2018, revised 2021). Datasheets for Datasets. *Communications of the ACM*.
-
-Ghoshal, S., Mittal, A., Singh, J., Ballesteros, M., Sun, W., Tu, F., Singh, S., Benajiba, Y., Shah,
-F., Bharadwaj, S., Ravi, S., & Roth, D. (2026). JTPRO: A Joint Tool–Prompt Reflective Optimization
-Framework for Language Agents. *arXiv:2604.19821*, Findings of ACL 2026. [Confirmed via literature
-search, 2026-08-18 — see Section 8.]
 
 Guo, Q., et al. (2023). Connecting Large Language Models with Evolutionary Algorithms Yields
 Powerful Prompt Optimizers (EvoPrompt).
@@ -884,16 +750,8 @@ Generations. **[AUTHOR ACTION — before submission: confirm exact venue.]**
 
 Ruan, Y., et al. (2023). Identifying the Risks of LM Agents with an LM-Emulated Sandbox (ToolEmu).
 
-Ursekar, V., Shanker, A., Chatrath, V., Xue, Y., & Denton, S. (2026). VeRO: An Evaluation Harness for
-Agents to Optimize Agents. *arXiv:2602.22480*, ICML 2026. [Confirmed via literature search,
-2026-08-18 — see Section 8.]
-
 Wang, X., et al. (2023). PromptAgent: Strategic Planning with Language Models Enables
 Expert-Level Prompt Optimization.
-
-Weng, S., Feng, Y., Zhang, J., Xie, X., Yu, J., & Liu, J. (2026). ARGUS: Defending LLM Agents Against
-Context-Aware Prompt Injection. *arXiv:2605.03378*. [Introduces the AgentLure benchmark. Confirmed
-via literature search, 2026-08-18 — see Section 8.]
 
 Yang, C., et al. (2023). Large Language Models as Optimizers (OPRO).
 

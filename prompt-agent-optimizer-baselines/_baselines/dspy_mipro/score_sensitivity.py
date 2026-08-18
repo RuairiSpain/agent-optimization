@@ -2,24 +2,25 @@
 """
 score_sensitivity.py — composite-score weight sensitivity / robustness analysis.
 
-Reviewer finding (external journal review of paper-v3, round 2 of the external review cycle; see
-docs/paper/publication-plan.md item #3): the severity weights, per-item penalties, and floor in
-score_response (metric.py) were pre-registered but never checked for robustness — a different,
-equally defensible choice of weights could in principle re-rank which system looks better on a
-given agent, and nothing in the paper showed that doesn't happen.
+Reviewer finding (an external journal review of paper-v3.md — a separate review from this project's
+own agent-paper-reviewer skill rounds 1/2; see docs/paper/publication-plan.md item #3): the severity
+weights, per-item penalties, and floor in score_response (metric.py) were pre-registered but never
+checked for robustness — a different, equally defensible choice of weights could in principle
+re-rank which system looks better on a given agent, and nothing in the paper showed that doesn't
+happen.
 
 This script answers that directly, and cheaply: it re-scores ALREADY-CAPTURED (query, response,
 tool_calls) triples from a run's holdout_eval.json under a grid of perturbed weight tables (see
 metric.DEFAULT_WEIGHTS for the shape), using the SAME score_response function every other number in
 this pack uses — no reimplementation, no new LM calls, no new optimization runs. It answers
 "would a different reasonable weight choice have changed our conclusion," not "is our weight choice
-correct" (there is no ground truth for that; see docs/paper/paper-v3.md Section 8 for the honest
+correct" (there is no ground truth for that; see docs/paper/paper-v4.md Section 8 for the honest
 scope of what this can and can't establish).
 
 SCOPE AS BUILT: only DSPy holdout_eval.json logs exist today (Foundry's response-level scoring path
-doesn't exist yet — see docs/paper/paper-v3.md Section 5.3/8). This script therefore reports
+doesn't exist yet — see docs/paper/paper-v4.md Section 5.3/8). This script therefore reports
 per-agent, per-run robustness for the DSPy track only. Once the Foundry response-level harness
-(paper-v3 Section 9) exists and produces a per-row log in the same {id, query, response, tool_calls}
+(paper-v4.md Section 9) exists and produces a per-row log in the same {id, query, response, tool_calls}
 shape, point --results-dir at wherever it writes and this script covers both tracks unchanged — the
 grid, the aggregation, and the reported statistic don't need to change, only the log source does.
 

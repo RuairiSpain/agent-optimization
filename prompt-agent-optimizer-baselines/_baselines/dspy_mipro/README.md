@@ -182,7 +182,7 @@ delta on a conclusion that's close to a threshold means it should be reported wi
 cannot show the weights are "correct" — there's no ground truth for that — only that a documented
 family of reasonable alternatives does or doesn't change what gets reported. Scoped to the DSPy
 track today, since Foundry's response-level scoring path doesn't exist yet (see the main pack
-README's Limitations and `docs/paper/paper-v3.md` Section 5.3/8) — it will cover both tracks
+README's Limitations and `docs/paper/paper-v4.md` Section 5.3/8) — it will cover both tracks
 unchanged, from whatever log the Foundry harness eventually writes, once that harness exists.
 
 ## Files

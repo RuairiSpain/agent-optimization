@@ -396,9 +396,11 @@ composite-score improvement can never numerically mask a contract failure:
   the item matches a named `agent_tests` entry; a `forbidden` tool-call-policy violation subtracts
   0.4 (a matching call observed); a `required` tool-call-policy violation subtracts 0.3 if no
   required tool was called at all, or 0.1 per still-missing tool if only some, but not all, of a
-  required set was called (a distinct, smaller partial-overlap penalty from the full-miss case); and
-  the per-item score is floored at 0.15 if the matching test is tagged `regression_blocks: true` and
-  any hard violation occurred, then clipped to `[0, 1]`. When a judge is enabled, this deterministic
+  required set was called (a distinct, smaller partial-overlap penalty from the full-miss case, and
+  the one term that does **not** by itself count as a "hard violation" below — only a full miss, a
+  `forbidden`-policy violation, or a present `must_not_contain` match does); and the per-item score
+  is floored at 0.15 if the matching test is tagged `regression_blocks: true` and any hard violation
+  occurred, then clipped to `[0, 1]`. When a judge is enabled, this deterministic
   score is blended with a judge-scored average across the agent's `rubrics` at a configurable weight
   (default 0.4 for the judge component). The composite score reported per agent per system in Table
   3 is the mean of this per-item score across all ten held-out items. The exact implementation is
@@ -595,10 +597,13 @@ optimized vs. baseline) across k=10 replicate seeds, against each agent's pre-re
 nothing in this pack computed a cost-growth-ratio for either track; `_tools/model_pricing.py` now
 implements that formula (a word-count-proxy token estimate, the same proxy the instruction-growth
 column already uses, priced against a small, dated, explicitly **unverified** per-model rate table —
-see the module's own `[AUTHOR ACTION]` notes) and both `run_mipro_baseline.py` and
-`run_manifest_template.json` write `est_cost_growth_ratio` into every run's manifest. The column is
-restored here as a matter of what the pipeline can now compute; the numbers below remain placeholders
-like everything else in this section, and the underlying price table still needs verifying against
+see the module's own `[AUTHOR ACTION]` notes). `run_mipro_baseline.py` computes and writes a real
+`est_cost_growth_ratio` into every DSPy run's manifest today; `run_manifest_template.json` defines
+the same field, null by default, for a future Foundry-side harness to populate the same way once one
+exists (Section 8) — it does not compute or write a value itself. The column is restored here as a
+matter of what the pipeline can now compute for at least one track; the numbers below remain
+placeholders like everything else in this section, and the underlying price table still needs
+verifying against
 each vendor's live pricing page before a real cost figure is reported (Section 8).*
 
 | Agent | Foundry instr. growth | DSPy instr. growth | Foundry est. cost growth | DSPy est. cost growth | Agent's stated bound |
@@ -707,14 +712,21 @@ contains no real data yet.
   that has no real language understanding**; every real judged number in this paper depends on
   actual judge-model calls, and the stub path exists only to validate that the code executes, never
   as a source of reportable data.
+- **The composite-score weights (`score_response`, Section 5.3) have not been checked for
+  robustness on real data.** `_baselines/dspy_mipro/score_sensitivity.py` exists and can re-score
+  already-captured logs under a perturbation grid at zero additional cost, but it has only been run
+  against dry-run stub-LM output so far — a real sensitivity number, showing whether this paper's
+  Table 3/4 conclusions would survive a different reasonable choice of penalty weights, requires the
+  real experimental logs Phase 2 produces (Section 9).
 - **Citations to the academic literature in Section 2 are drawn from the authors' working knowledge
   and have not yet been independently verified against primary sources (exact venue, volume, and
-  page) for this draft**, with one exception: Ursekar et al. (2026, VeRO), Ghoshal et al. (2026,
-  JTPRO), Weng et al. (2026, AgentLure/Argus), and Alpay & Alpay (2026, AgentSecBench) were added in
-  this revision after a live literature search that confirmed each paper's existence, arXiv
-  identifier, and author list directly (see `docs/paper/publication-plan.md` §3) — specifically
-  because an external review's citation suggestions are exactly the kind of claim that can be
-  hallucinated and should never be taken on faith. The rest of Section 2, including the two
+  page) for this draft**, with one exception: Debenedetti et al. (2024, AgentDojo), Ursekar et al.
+  (2026, VeRO), Ghoshal et al. (2026, JTPRO), Weng et al. (2026, AgentLure/Argus), and Alpay & Alpay
+  (2026, AgentSecBench) were added in this revision after a live literature search that confirmed
+  each paper's existence, arXiv identifier, and author list directly (see
+  `docs/paper/publication-plan.md` §3) — specifically because an external review's citation
+  suggestions are exactly the kind of claim that can be hallucinated and should never be taken on
+  faith. The rest of Section 2, including the two
   citations with the least standardized public form — Opsahl-Ott et al. (2024) for MIPROv2 and
   Panickssery et al. (2024) — still needs this same verification pass before any submission-ready
   version. The Foundry product-documentation citation (Microsoft, 2026) likewise needs its exact URL
@@ -733,6 +745,9 @@ contains no real data yet.
   held-out split (rather than only the implicit 0.15-floor effect inside the continuous
   response-level score), so Table 4 can report the full gating definition an earlier draft of its
   caption promised, not only `blocked: false`.
+- **Run `_tools/score_sensitivity.py`'s weight-perturbation grid against real experimental logs**
+  once Phase 2 produces them, and report whether Table 3/4's conclusions are stable across the
+  grid or weight-sensitive on any agent (Section 8).
 - Verify `_tools/model_pricing.PRICE_TABLE`'s rates against each vendor's live pricing page (every
   entry is currently tagged `verified: False`), and replace the word-count token proxy with a real
   tokenizer count, so Table 7's cost-growth-ratio column can be reported as a measured figure rather

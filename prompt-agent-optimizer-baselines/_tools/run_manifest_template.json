@@ -35,7 +35,7 @@
     "composite_score": null,
     "composite_score_note": "This is the Optimize wizard's own reported number, computed in-sample against dataset.file_uploaded (dataset/optimize.jsonl). It is NOT a holdout score and compare_to_foundry.py never treats it as one.",
     "holdout_composite_score": null,
-    "holdout_composite_score_note": "Leave null until a response-level harness runs this exported candidate against dataset/holdout.jsonl and scores its real responses/tool calls with the shared score_response function (see _baselines/dspy_mipro/metric.py). That harness does not exist in this pack yet (docs/paper/paper-v3.md Sec 5.2/8) -- compare_to_foundry.py reports the gap explicitly rather than substituting composite_score.",
+    "holdout_composite_score_note": "Leave null until a response-level harness runs this exported candidate against dataset/holdout.jsonl and scores its real responses/tool calls with the shared score_response function (see _baselines/dspy_mipro/metric.py). That harness does not exist in this pack yet (docs/paper/paper-v4.md Sec 5.2/8) -- compare_to_foundry.py reports the gap explicitly rather than substituting composite_score.",
     "per_rubric_scores": {},
     "instruction_token_count": null,
     "instruction_growth_ratio_vs_baseline": null,
@@ -43,7 +43,7 @@
     "optimized_est_cost_per_call_usd": null,
     "est_cost_growth_ratio": null,
     "cost_pricing_table_version": null,
-    "cost_estimate_note": "Fill baseline/optimized_est_cost_per_call_usd from _tools/model_pricing.estimate_cost_usd(input_tokens, output_tokens, eval_model.name) against this candidate's real instruction word count and mean holdout response word count, the same word-count-proxy token estimate _baselines/dspy_mipro/run_mipro_baseline.py uses for the DSPy track, so the two tracks' cost-growth-ratio numbers (paper-v3.md Table 7) are computed the same way. Leave null (never 0) if eval_model.name isn't in PRICE_TABLE.",
+    "cost_estimate_note": "Fill baseline/optimized_est_cost_per_call_usd from _tools/model_pricing.estimate_cost_usd(input_tokens, output_tokens, eval_model.name) against this candidate's real instruction word count and mean holdout response word count, the same word-count-proxy token estimate _baselines/dspy_mipro/run_mipro_baseline.py uses for the DSPy track, so the two tracks' cost-growth-ratio numbers (paper-v4.md Table 7) are computed the same way. Leave null (never 0) if eval_model.name isn't in PRICE_TABLE.",
     "est_latency_ms": null
   },
   "notes": ""

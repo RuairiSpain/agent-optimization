@@ -7,7 +7,8 @@ drove each revision. Two review sources exist:
    AI/agents venue, defined as a reusable project skill at
    [`.claude/skills/agent-paper-reviewer/SKILL.md`](../../../.claude/skills/agent-paper-reviewer/SKILL.md).
    Not the same voice that wrote the paper. Read the skill file for the review persona and protocol.
-   This ran two rounds, per the original three-pass plan (v1 → review → v2 → review → v3).
+   This ran two rounds against the original three-pass plan (v1 → review → v2 → review → v3), then a
+   third round against `paper-v4.md` after the external review below produced it.
 2. **An external journal review** of `paper-v3.md`, pasted into this project from outside the
    internal skill cycle. Its response is `response-letters/external-journal-review.md`, and the
    revision it produced is `paper-v4.md`. `docs/publication-plan.md` (one level up, in
@@ -32,13 +33,18 @@ this keeps the paper file readable as a paper, not a revision log. Each manuscri
 | `paper-v3.md` | Revision addressing every required change from round 2 — the last version produced entirely within the internal three-pass plan. |
 | `response-letters/external-journal-review.md` | Response to the external journal review of `paper-v3.md`; full triage in `publication-plan.md`. |
 | `publication-plan.md` | The fuller plan for getting this paper publication-ready: statistical redesign detail, literature verification, phased roadmap (what's buildable now vs. what needs live access/budget/human raters), and venue strategy. |
-| `paper-v4.md` | Current manuscript. Addresses the external review's Phase 0 items (statistical fix, related work, cost metric, Table 1 boundary note) and is the first version with the response-to-reviewers scaffolding moved out of the manuscript body entirely. |
+| `paper-v4.md` | Manuscript addressing the external review's Phase 0 items (statistical fix, related work, cost metric, Table 1 boundary note), with the response-to-reviewers scaffolding moved out of the manuscript body entirely. |
+| `review-round-3.md` | The internal reviewer's structured review of `paper-v4.md` — found the manuscript's protocol sound but its own revision-history bookkeeping inconsistent with version control (see `response-letters/round-3.md`). |
+| `response-letters/round-3.md` | Response to round 3: restores `paper-v3.md` to its true pre-Phase-0 state and fixes several smaller internal cross-references. |
 
 ## Status
 
-Every pass here was produced without a real experimental run behind it — the paper's results
-section is, and remains through every version, a template for what the real results table will look
-like once `docs/experiment-runbook.md` has actually been executed against real Foundry and DSPy
-optimization runs. Nothing in any version of this paper should be cited as an experimental finding.
-Treat `paper-v4.md` as the structural and methodological template to fill in with real data (per
-`publication-plan.md`'s Phases 1-4), not as a finished, submittable paper.
+`paper-v3.md` is frozen as a genuine historical snapshot — byte-identical to what the external
+reviewer actually read (restored from commit `823e78f` after round 3 found it had been edited in
+place). `paper-v4.md` is the current manuscript and the only version that should be edited going
+forward. Every pass here was produced without a real experimental run behind it — the paper's
+results section is, and remains through every version, a template for what the real results table
+will look like once `docs/experiment-runbook.md` has actually been executed against real Foundry and
+DSPy optimization runs. Nothing in any version of this paper should be cited as an experimental
+finding. Treat `paper-v4.md` as the structural and methodological template to fill in with real data
+(per `publication-plan.md`'s Phases 1-4), not as a finished, submittable paper.

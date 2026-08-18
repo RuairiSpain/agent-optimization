@@ -93,7 +93,7 @@ def foundry_holdout_scores(manifests: list[dict]) -> tuple[list[float], int]:
     harness — one that runs the exported/deployed candidate against dataset/holdout.jsonl and scores
     its real responses with the shared score_response function — writes
     outputs.holdout_composite_score. That harness does not exist in this pack yet (see
-    docs/paper/review-round-2.md Weakness 1 and docs/paper/paper-v3.md Sec 5.2/8): the Optimize
+    docs/paper/review-round-2.md Weakness 1 and docs/paper/paper-v4.md Sec 5.2/8): the Optimize
     wizard's own outputs.composite_score is a different, in-sample number computed against whatever
     was uploaded to the wizard (dataset/optimize.jsonl, per experiment-runbook.md Step 3) — it is not
     a holdout score and is never substituted here, even though the two fields can look
@@ -148,7 +148,7 @@ def main() -> None:
             # foundry_manifests is non-empty but foundry_holdout_scores() found no
             # outputs.holdout_composite_score on any of them: there is no response-level scoring
             # harness in this pack yet that runs the exported Foundry candidate against
-            # dataset/holdout.jsonl and scores it with score_response (see docs/paper/paper-v3.md
+            # dataset/holdout.jsonl and scores it with score_response (see docs/paper/paper-v4.md
             # Sec 5.2/8 and docs/paper/review-round-2.md). We report that gap instead of silently
             # filling it with the wizard's own in-sample composite_score.
             foundry_status = (
