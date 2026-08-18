@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.1.0 — open DSPy MIPROv2 baseline
+
+Adds `_baselines/dspy_mipro/`, an open, reproducible comparison point for the Foundry optimizer,
+addressing the "how would this get accepted at an NLP/agents conference" review's top recommendation
+(a closed, versioned, preview-stage vendor product isn't reproducible by a reader without access to
+it — an open baseline run under the authors' own control is).
+
+- Single-sourced against the same pack: `agent_loader.py` reads the identical `agent.yaml` /
+  `instructions.md` / `tools.json` / dataset splits / `expected/expectations.json` the Foundry track
+  uses — nothing is re-authored for DSPy.
+- Same leakage guard: MIPROv2 only ever sees `dataset/optimize.jsonl` (internally re-split into
+  train/val by `--seed`); `dataset/holdout.jsonl` is reserved for the final report, exactly
+  mirroring `_tools/build_foundry_dataset.py`.
+- Same contract-scoring code, not a reimplementation: `metric.py` imports `eval_match`/`validate`
+  directly from `_tools/validate_candidate.py`.
+- Same run-manifest shape as `_tools/run_manifest_template.json`, so `compare_to_foundry.py` can
+  merge DSPy and Foundry runs into one table (with a percentile bootstrap 95% CI, not a
+  normal-approximation CI, appropriate for the small k=3-5 replicate counts this pack expects).
+- `run_all.py` runs k≥1 replicate seeds per agent by design, not a single Run1/Run2 draw.
+- Verified end-to-end with a zero-cost, zero-network field-adaptive stub LM (`stub_lm.py`): all 10
+  agents × 3 seeds (30/30 runs) complete the full pipeline — dataset loading, `dspy.ChainOfThought`
+  and `dspy.ReAct` program construction with mocked tool calls, the full `MIPROv2.compile()` search
+  loop (bootstrapping → instruction proposal → optuna-backed candidate selection), instruction
+  extraction, and holdout evaluation — without error. This proves the plumbing; it says nothing
+  about optimization quality, which requires a real `--task-lm`/`--prompt-lm`.
+- Documented limitations carried into every result file: the two MCP agents (`04`, `07`) are
+  optimized on an instructions-(+function-tools)-only basis (no real MCP server to call); no
+  LLM-judge layer is wired up by default (pure regex/string scoring only, same "UNJUDGED queue"
+  boundary as `validate_candidate.py`); `08`'s multi-turn rows are scored as flattened strings,
+  inherited from the Foundry track's own current limitation.
+
 ## 2.0.0 — full revision: review fixes applied, pack expanded to 10 agents / 30 rows each
 
 This revision applies every fix identified in the pack review, expands the sample set from 6 to 10

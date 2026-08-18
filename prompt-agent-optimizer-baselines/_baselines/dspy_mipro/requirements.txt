@@ -1,0 +1,5 @@
+# DSPy MIPROv2 open-baseline requirements. Install into a virtualenv:
+#   python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+dspy-ai>=3.0
+optuna>=3.0
+pyyaml>=6.0

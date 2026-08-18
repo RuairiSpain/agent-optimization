@@ -5,6 +5,12 @@ A sample pack of ten baseline **prompt agents** for Microsoft Foundry Agent Serv
 what it invents. See `CHANGELOG.md` for the full list of methodological fixes applied in v2.0.0 and
 exactly which prior review finding each one addresses.
 
+An **open, reproducible baseline** (DSPy MIPROv2) runs against the identical pack — see
+`_baselines/dspy_mipro/`. It exists so results aren't dependent on access to Foundry's closed preview
+product: it reuses the same dataset split, the same `validate_candidate.py` contract-scoring code,
+and the same run-manifest shape, so its output merges directly into one comparison table alongside
+Foundry runs via `_baselines/dspy_mipro/compare_to_foundry.py`.
+
 ## Quick facts
 
 - **10 agents**, **300 rows total** (20 optimize / 10 holdout each — see "Dataset split" below).
@@ -68,6 +74,7 @@ exact wording is caught rather than rewarded.
 _schema/                         expectations.schema.json (v2.0.0)
 _tools/                          validate_candidate.py, build_foundry_dataset.py,
                                   similarity_baseline.py, run_manifest_template.json
+_baselines/dspy_mipro/           open DSPy MIPROv2 baseline — see its own README.md
 CHANGELOG.md                     review findings → fixes, cross-referenced
 manifest.json
 ```
