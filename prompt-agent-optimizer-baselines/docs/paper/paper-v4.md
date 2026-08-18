@@ -46,8 +46,11 @@ release the benchmark, the scoring harness, and the DSPy baseline implementation
 Automatic prompt optimization has moved from a research technique to a shipped product feature.
 Systems that iteratively propose, evaluate, and select instruction rewrites — without gradient
 access to the underlying model — are now available as commercial, closed-loop services integrated
-directly into agent-hosting platforms, from at least two major cloud vendors as of this writing.
-Microsoft Foundry Agent Service's agent optimizer (Microsoft, 2026), in public preview at the time
+directly into agent-hosting platforms, from at least two major cloud vendors as of this writing — the
+two we identify below, found opportunistically during this paper's literature and product search
+rather than from a systematic survey of every agent-hosting platform on the market, so "at least two"
+should be read as a floor, not an exhaustive count. Microsoft Foundry Agent Service's agent optimizer
+(Microsoft, 2026), in public preview at the time
 of writing, is this paper's subject: given a baseline agent and an evaluation dataset, it proposes
 candidate instructions, tool descriptions, and model choices, scores each candidate, and returns the
 highest-scoring configuration for deployment. Amazon Bedrock AgentCore's Optimization capability
@@ -267,12 +270,17 @@ Table 1 summarizes the gap this paper addresses.
 *Table 1. Coverage comparison against the closest related benchmarks, methods, and products (a
 qualitative, author-assessed summary of publicly documented capabilities — not derived from
 re-running these systems, and distinct from the placeholder experimental data in Section 6). Rows
-describe a peer-reviewed or preprint academic paper, cited in References, with two exceptions: the
+describe a peer-reviewed or preprint academic paper, cited in References, with three exceptions: the
 "Foundry agent optimizer" and "Bedrock AgentCore Optimization" rows describe commercial products'
 own documentation (Microsoft, 2026; Amazon, 2026) rather than an independently reviewed or
 reproducible source — their cells should be read as "what the vendor states," not as an
 independently verified capability claim, which is exactly the asymmetry this paper's benchmark
-exists to let a third party check empirically instead of taking on trust, for either vendor.*
+exists to let a third party check empirically instead of taking on trust, for either vendor. The
+"Constraint Drift" row is the third exception, of a different kind: it scores a position paper
+(Section 2.1) that, by its own account, releases no benchmark, dataset, or method, against columns
+built for systems that evaluate something empirically — its cells are deliberately not a bare No/N/A
+where that would misrepresent the paper (e.g., "Argues for it, does not measure it," rather than
+"No," for preservation under rewrite) and should be read as describing an argument, not a result.*
 
 | System | Optimizes agent instructions | Evaluates preservation under rewrite | Train/test separation for the optimizer | Evaluates indirect/tool-output injection | Evaluates an *optimizer's* effect on injection resistance | Open, reproducible |
 |---|---|---|---|---|---|---|
@@ -280,7 +288,7 @@ exists to let a third party check empirically instead of taking on trust, for ei
 | DSPy / MIPROv2 | Yes | No | Configurable, not enforced | No | No | Yes |
 | VeRO (Ursekar et al., 2026) | Yes (harness/code, not only prompt) | No | Versioned snapshots; not an adversarial-preservation split | No | No | Yes (ICML 2026) |
 | JTPRO (Ghoshal et al., 2026) | Yes (instructions + tool schemas jointly) | No | Not specified | No | No | Not confirmed |
-| MAS-PromptBench (Bai & Shi, 2026) | No (benchmarks optimizers, doesn't optimize itself) | No (measures accuracy variance, not property preservation) | N/A | No | No | Yes |
+| MAS-PromptBench (Bai & Shi, 2026) | No (benchmarks optimizers, doesn't optimize itself) | No (measures accuracy variance, not property preservation) | N/A | No | No | Not confirmed |
 | LCO (Wan et al., 2026) | No (a runtime constraint framework, not an instruction optimizer) | N/A (mitigates within one execution, not across an optimizer's rewrite) | N/A | No | No | Not confirmed |
 | Constraint Drift (Li et al., 2026) | N/A (position paper; no benchmark or method released) | Argues for it, does not measure it | N/A | No | No | N/A (position paper) |
 | τ-bench | No (evaluates a fixed agent) | N/A | N/A | No | No | Yes |
@@ -290,7 +298,7 @@ exists to let a third party check empirically instead of taking on trust, for ei
 | AgentSecBench (Alpay & Alpay, 2026) | No (evaluates a fixed agent) | N/A | N/A | **Yes, via a noninterference framing broader than injection alone** | No | Not confirmed |
 | ToolEmu / AgentHarm / R-Judge | No | N/A | N/A | No | No | Yes |
 | Foundry agent optimizer (this paper's subject; Microsoft, 2026) | Yes | Not documented as evaluated | Not enforced by the product | No | No | No (closed, hosted) |
-| Bedrock AgentCore Optimization (Amazon, 2026) | Yes (system prompts + tool descriptions) | Not documented as evaluated | Batch evaluation runs against "a defined test dataset"; a separate live-traffic A/B test follows, which is not the same as an enforced held-out adversarial split | No | No | No (closed, hosted) |
+| Bedrock AgentCore Optimization (Amazon, 2026) | Yes (scope not independently confirmed beyond "recommendations" in Amazon's own description — see [AUTHOR ACTION] in References) | Not documented as evaluated | Batch evaluation runs against "a defined test dataset"; a separate live-traffic A/B test follows, which is not the same as an enforced held-out adversarial split | No | No | No (closed, hosted) |
 | **This work** | Yes (both tracks) | **Yes** | **Enforced throughout the protocol, including the iterative-refinement condition (§5.4)** | Yes (agent 07, adapted from InjecAgent's delivery mechanism) | **Yes** | **Yes (the benchmark and the DSPy baseline; Foundry itself remains closed)** |
 
 "Not confirmed" in the rightmost column means we did not verify a code/data release for that system
@@ -328,8 +336,9 @@ descriptions together (Section 5.1), so we cannot speak to JTPRO's headline find
 other; we adopt the same joint optimization surface rather than test whether jointness itself helps.
 Conversely, on JTPRO's own reported evaluation (accuracy on tool-selection and slot-filling tasks),
 a tool-schema edit that loosens a required parameter's enum or drops a disambiguating description —
-exactly the kind of change our `tool_rules` axis (immutable names/types/enums, Section 4.1) exists
-to catch — could plausibly *improve* the accuracy metric JTPRO reports (a looser schema can make it
+exactly the kind of change our `tool_rules` axis (`immutable` names/required parameters and
+`disambiguation_pairs`, Section 4.2) exists to catch — could plausibly *improve* the accuracy metric
+JTPRO reports (a looser schema can make it
 easier for the agent to pick a plausible tool) while simultaneously widening what a `forbidden`
 tool-call policy would let through. Nothing in an accuracy-only evaluation of joint optimization
 would surface that trade-off; it is the same "score went up, something the score didn't measure
@@ -390,13 +399,14 @@ one for their own research questions; it is the specific methodological gap this
 ### 2.8 Distinction from commercial prompt-regression-testing tooling
 
 A reader familiar with LLM-application infrastructure could reasonably ask whether this paper's
-contribution already exists as a product. Five platforms' own public claims about themselves, cited
-individually because each documents a materially different mechanism rather than one generic
-"regression testing" feature, converge on this same broad pattern: Braintrust (2026) turns a
+contribution already exists as a product. Six citations across five vendors' own public claims about
+themselves — LangChain contributes two, LangSmith and the separate Promptim library, everything else
+one each — are cited individually because each documents a materially different mechanism rather than
+one generic "regression testing" feature, converging on this same broad pattern: Braintrust (2026) turns a
 production failure a human flagged into a reusable test that runs on every future deployment;
 PromptLayer (2026) runs scheduled regression tests against a versioned prompt history and supports
-A/B testing between versions; LangChain's LangSmith (2026), paired with the separate, experimental
-Promptim library (LangChain, 2026) released in 2026, provides dataset management and tracking for an
+A/B testing between versions; LangChain's LangSmith (2026a), paired with the separate, experimental
+Promptim library (LangChain, 2026b) released in 2026, provides dataset management and tracking for an
 external optimization loop rather than a first-class, integrated optimizer of its own; Langfuse
 (2026) is a tracing and observability platform that other tools' evaluators, including DeepEval's,
 can read sampled production traffic from; and Confident AI's DeepEval (2026) is explicit that its
@@ -499,6 +509,18 @@ baseline rule that is correct in principle but broken in a specific, checkable w
 contradicted elsewhere, or non-actionable — that the candidate must fix in a stated way). The
 remaining two, `should_add` and `nice_to_have`, are purely advisory and never gate promotion.
 
+Tool-using agents' contracts additionally specify a `tool_rules` block, separate from the six
+instruction categories above, implementing the tool-boundary-correctness axis the Abstract names: an
+`immutable` list naming tool names and required parameters an optimizer must not rename,
+retype, or drop; a `descriptions_should_improve` list flagging specific, checkable defects in a
+tool's or parameter's description (a vague description that omits what a return value means or what
+format a parameter expects); and `disambiguation_pairs` naming two tools an optimizer should teach
+the candidate to distinguish, with the specific clarification expected. This is the mechanism Section
+2.7 refers to when arguing that a tool-schema edit which raises a task-accuracy metric (as in the
+JTPRO comparison) can simultaneously loosen a boundary this axis exists to catch — for example,
+widening a `required` parameter's implied scope by deleting a disambiguating clause from its
+description, even where the parameter's name and type (covered by `immutable`) are left untouched.
+
 Each agent additionally defines a set of concrete input/expected-behavior test cases (`agent_tests`).
 Counted directly across all ten agents' `expected/expectations.json` files (totals of 9, 10, 9, 10,
 13, 10, 10, 10, 10, 10), this ranges from 9 to 13 tests per agent (mean 10.1), of which 70% to 100%
@@ -527,7 +549,10 @@ that condition's selection process has seen.
 ### 4.4 What gap this fills
 
 Section 2.6 (Table 1) states this in comparative terms; Section 2.7 makes it concrete system by
-system. Concretely: existing APO benchmarks measure
+system against the closest academic work; Section 2.8 makes the same case against commercial
+prompt-regression-testing infrastructure, which is a different kind of near-neighbor (mature
+tooling, not a competing evaluation) but the same underlying gap — no purpose-built adversarial
+content or enforced train/test separation. Concretely: existing APO benchmarks measure
 whether optimization improves a task metric; existing agent benchmarks measure whether a fixed agent
 can perform a task or resist an attack, including, in InjecAgent's case, an indirect injection
 delivered through tool output. This benchmark is, to our knowledge, the first to hold the
@@ -1042,10 +1067,10 @@ Jimenez, C. E., et al. (2023). SWE-bench: Can Language Models Resolve Real-World
 Khattab, O., et al. (2023). DSPy: Compiling Declarative Language Model Calls into Self-Improving
 Pipelines.
 
-LangChain. (2026). *LangSmith* [Product documentation]. **[AUTHOR ACTION — before submission:
+LangChain. (2026a). *LangSmith* [Product documentation]. **[AUTHOR ACTION — before submission:
 confirm the exact documentation URL and access date.]**
 
-LangChain. (2026). *Promptim* [Open-source library documentation, experimental]. **[AUTHOR ACTION —
+LangChain. (2026b). *Promptim* [Open-source library documentation, experimental]. **[AUTHOR ACTION —
 before submission: confirm the exact documentation URL and access date; note its status may have
 changed from "experimental" since this literature pass.]**
 

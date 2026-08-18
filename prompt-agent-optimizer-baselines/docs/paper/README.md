@@ -8,7 +8,9 @@ drove each revision. Two review sources exist:
    [`.claude/skills/agent-paper-reviewer/SKILL.md`](../../../.claude/skills/agent-paper-reviewer/SKILL.md).
    Not the same voice that wrote the paper. Read the skill file for the review persona and protocol.
    This ran two rounds against the original three-pass plan (v1 → review → v2 → review → v3), then a
-   third round against `paper-v4.md` after the external review below produced it.
+   third round against `paper-v4.md` after the external review below produced it, then a fourth round
+   after `paper-v4.md` was further extended (Section 2.7's per-system comparison, and a novelty-check
+   pass adding Section 2.8 and four new citations) without an intervening review.
 2. **An external journal review** of `paper-v3.md`, pasted into this project from outside the
    internal skill cycle. Its response is `response-letters/external-journal-review.md`, and the
    revision it produced is `paper-v4.md`. `docs/publication-plan.md` (one level up, in
@@ -36,6 +38,8 @@ this keeps the paper file readable as a paper, not a revision log. Each manuscri
 | `paper-v4.md` | Current manuscript. Addresses the external review's Phase 0 items (statistical fix, related work, cost metric, Table 1 boundary note), with the response-to-reviewers scaffolding moved out of the manuscript body entirely; later extended with a deeper per-system comparison (§2.7), a broad novelty-check literature/product search adding Bedrock AgentCore Optimization, MAS-PromptBench, LCO, and Constraint Drift (§1, §2.1, Table 1), and a distinction from commercial prompt-regression-testing tooling with all six named products individually cited (§2.8, References). |
 | `review-round-3.md` | The internal reviewer's structured review of `paper-v4.md` — found the manuscript's protocol sound but its own revision-history bookkeeping inconsistent with version control (see `response-letters/round-3.md`). |
 | `response-letters/round-3.md` | Response to round 3: restores `paper-v3.md` to its true pre-Phase-0 state and fixes several smaller internal cross-references. |
+| `review-round-4.md` | The internal reviewer's structured review of `paper-v4.md` after Section 2.7 and the novelty-check pass (Section 2.8, four new citations) were added without an intervening review — found no structural problems, but a citation-provenance slip (an unverified "Yes" in Table 1) and a broken internal cross-reference (`tool_rules` never defined in the manuscript body), plus six smaller precision/consistency items. |
+| `response-letters/round-4.md` | Response to round 4: fixes the Table 1 slip, adds the missing `tool_rules` description to Section 4.2, and resolves all six suggested items. |
 
 ## Status
 
