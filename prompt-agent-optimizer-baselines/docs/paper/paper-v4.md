@@ -390,14 +390,23 @@ one for their own research questions; it is the specific methodological gap this
 ### 2.8 Distinction from commercial prompt-regression-testing tooling
 
 A reader familiar with LLM-application infrastructure could reasonably ask whether this paper's
-contribution already exists as a product: platforms including Braintrust, PromptLayer, LangSmith
-(paired with the separate Promptim optimization library), Langfuse, and DeepEval all market some form
-of prompt regression testing — running a prompt change against a stored suite of test cases and
-flagging a drop before it reaches production. We rely here on these vendors' own public claims about
-their products, not an independent evaluation of them, the same evidentiary standard Table 1 applies
-to Foundry's and Bedrock AgentCore's own documentation. Two distinctions separate that category of
-tooling from this paper's contribution, and both are about what fills the test suite, not whether a
-test suite exists:
+contribution already exists as a product. Five platforms' own public claims about themselves, cited
+individually because each documents a materially different mechanism rather than one generic
+"regression testing" feature, converge on this same broad pattern: Braintrust (2026) turns a
+production failure a human flagged into a reusable test that runs on every future deployment;
+PromptLayer (2026) runs scheduled regression tests against a versioned prompt history and supports
+A/B testing between versions; LangChain's LangSmith (2026), paired with the separate, experimental
+Promptim library (LangChain, 2026) released in 2026, provides dataset management and tracking for an
+external optimization loop rather than a first-class, integrated optimizer of its own; Langfuse
+(2026) is a tracing and observability platform that other tools' evaluators, including DeepEval's,
+can read sampled production traffic from; and Confident AI's DeepEval (2026) is explicit that its
+regression-testing mechanism is a CI/CD quality gate in the literal sense — it runs a golden dataset
+against a changed prompt and fails the pipeline if a metric drops below a configured threshold. We
+rely here on these five vendors' own public claims about their products, not an independent
+evaluation of them, the same evidentiary standard Table 1 applies to Foundry's and Bedrock
+AgentCore's own documentation. Two distinctions separate this category of tooling from this paper's
+contribution, and both are about what fills the test suite, not whether a test suite or a gate
+exists:
 
 1. **General-purpose regression testing checks whatever the user already put in the suite.** These
    platforms are infrastructure: they execute a user-authored set of test cases and compare scores
@@ -914,8 +923,12 @@ contains no real data yet.
   citations with the least standardized public form — Opsahl-Ott et al. (2024) for MIPROv2 and
   Panickssery et al. (2024) — still needs this same verification pass before any submission-ready
   version. The Foundry (Microsoft, 2026) and Bedrock AgentCore (Amazon, 2026) product-documentation
-  citations likewise need their exact URLs and access dates confirmed by the authors before
-  submission.
+  citations, and the six commercial regression-testing tooling citations added in Section 2.8
+  (Braintrust, PromptLayer, LangSmith and Promptim, Langfuse, and DeepEval, all 2026), likewise need
+  their exact URLs and access dates confirmed by the authors before submission — each was described
+  from public search results summarizing the vendor's own claims, not from a directly fetched page,
+  since this pack's network access could not reach any of these domains at the time of this literature
+  pass.
 
 ## 9. Future work
 
@@ -995,6 +1008,12 @@ Andriushchenko, M., et al. (2024). AgentHarm: A Benchmark for Measuring Harmfuln
 Bai, J., & Shi, L. (2026). MAS-PromptBench: When Does Prompt Optimization Improve Multi-Agent LLM
 Systems? *arXiv:2606.23664*. [Confirmed via literature search, 2026-08-18 — see Section 8.]
 
+Braintrust. (2026). *Braintrust* [Product documentation]. **[AUTHOR ACTION — before submission:
+confirm the exact documentation URL and access date.]**
+
+Confident AI. (2026). *DeepEval* [Open-source library documentation]. **[AUTHOR ACTION — before
+submission: confirm the exact documentation URL and access date.]**
+
 Debenedetti, E., Zhang, J., Balunović, M., Beurer-Kellner, L., Fischer, M., & Tramèr, F. (2024).
 AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents.
 *NeurIPS Datasets and Benchmarks Track*. [Confirmed via literature search, 2026-08-18 — see Section
@@ -1023,6 +1042,16 @@ Jimenez, C. E., et al. (2023). SWE-bench: Can Language Models Resolve Real-World
 Khattab, O., et al. (2023). DSPy: Compiling Declarative Language Model Calls into Self-Improving
 Pipelines.
 
+LangChain. (2026). *LangSmith* [Product documentation]. **[AUTHOR ACTION — before submission:
+confirm the exact documentation URL and access date.]**
+
+LangChain. (2026). *Promptim* [Open-source library documentation, experimental]. **[AUTHOR ACTION —
+before submission: confirm the exact documentation URL and access date; note its status may have
+changed from "experimental" since this literature pass.]**
+
+Langfuse. (2026). *Langfuse* [Product documentation]. **[AUTHOR ACTION — before submission: confirm
+the exact documentation URL and access date.]**
+
 Li, T., Ma, Y., Wen, H., Huang, Z., Zhou, Q., Fu, Z., & Cheng, G. (2026). Safe Multi-Agent Behavior
 Must Be Maintained, Not Merely Asserted: Constraint Drift in LLM-Based Multi-Agent Systems.
 *arXiv:2605.10481*. [Confirmed via literature search, 2026-08-18 — see Section 8.]
@@ -1040,6 +1069,9 @@ Model Programs (MIPRO). **[AUTHOR ACTION — before submission: confirm exact au
 
 Panickssery, A., Bowman, S. R., & Feng, S. (2024). LLM Evaluators Recognize and Favor Their Own
 Generations. **[AUTHOR ACTION — before submission: confirm exact venue.]**
+
+PromptLayer. (2026). *PromptLayer* [Product documentation]. **[AUTHOR ACTION — before submission:
+confirm the exact documentation URL and access date.]**
 
 Ruan, Y., et al. (2023). Identifying the Risks of LM Agents with an LM-Emulated Sandbox (ToolEmu).
 
