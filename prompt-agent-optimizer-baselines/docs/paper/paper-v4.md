@@ -1,67 +1,15 @@
 ---
 title: "Auditing Closed-Loop Prompt Optimization for LLM Agents: A Benchmark and Reproducible Baseline"
-status: "DRAFT v3 — final revision, revised per review-round-2.md. Contains placeholder experimental data, clearly marked. Not for submission."
----
-
-# Response to reviewers — round 1
-
-We thank the reviewer for a review that found real, load-bearing problems in the protocol, not just
-in the (correctly, intentionally) placeholder results. Every blocking required change is addressed
-below; every suggested change is applied. Two changes reached outside the paper itself into
-`docs/experiment-runbook.md` and `_baselines/dspy_mipro/run_mipro_baseline.py`, since the reviewer
-verified the paper's claims by cross-checking those files directly and found the inconsistency
-lived partly in them, not only in the paper's prose.
-
-| # | Required change | Status | Where |
-|---|---|---|---|
-| 1 | Define the composite-score formula | **Done** | §5.3 now states the exact formula and clarifies instruction-level `blocked` and response-level composite score are reported as two separate numbers by design, never combined into one |
-| 2 | Fix the statistical power ceiling | **Done** | §5.6 now states the exact minimum-p-value formula, requires k ≥ 9 (we specify k = 10) for any Holm-corrected significance claim, and makes the bootstrap CI and effect size the primary report at any k |
-| 3 | Reconcile k across paper and runbook | **Done** | `experiment-runbook.md` Step 7 rewritten to state the k ≥ 9 / k = 10 requirement explicitly and match §5.6 |
-| 4 | Fix holdout leakage in elect-and-reoptimize | **Done** | Election now uses MIPROv2's own internal validation slice of `dataset/optimize.jsonl` (a new `run_manifest.json` field), never `dataset/holdout.jsonl`; `run_mipro_baseline.py` updated to compute and record this score |
-| 5 | Correct the `should_edit` gating description | **Done** | §4.2 corrected: four categories gate when critical (`must_have`, `should_remove`, `must_not_appear`, `should_edit`), two are purely advisory (`should_add`, `nice_to_have`) |
-| 6 | Verify the agent_tests count/ratio claim | **Done** | §4.2 replaced with the actual observed range (9–13 tests per agent, 70–100% gating, mean ≈ 87%), computed directly from all ten agents' `expected/expectations.json` |
-| 7 | Verify the InjecAgent characterization | **Done** | §2.3 and Table 1 corrected: InjecAgent does evaluate indirect, tool-mediated injection on a fixed agent; the paper's novelty claim is re-scoped to the optimizer-under-rewrite axis, not the injection-vector axis |
-| 8 | Cite Foundry's own documented behavior | **Done** | Added a dated product-documentation reference, cited at every direct claim about Foundry's behavior |
-| 9 | Add a growth-ratio results table | **Done** | New Table 7 |
-| 10 | Add an iterative-refinement results table | **Done** | New Table 8 |
-| 11 | Disambiguate "illustrative" (Table 1) from "placeholder" (§6) | **Done** | Table 1's caption now reads "qualitative, author-assessed" |
-| 12 | Add "rows omitted" notes to Tables 4–6 | **Done in round 1, but incomplete** | Round 2 found only Tables 4 and 6 actually got the note; Table 5 did not. Fixed below (round 2, item 7). |
-| 13 | Add a systematic-vs-stochastic decision rule to §7 | **Done** | |
-| 14 | Add the power ceiling and leakage risk to Limitations | **Superseded** | Both are now fixed in the protocol rather than disclosed as open limitations; §8 instead discloses the *cost* of the fix (k = 10 is expensive) as its replacement limitation |
-| 15 | Clarify `should_edit` scoring | **Done** | §5.3 states `should_edit` is scored via its `accept_if` criterion through the same regex/semantic/judge pathway as every other rule type |
-
-All six of the reviewer's questions are answered inline in the revised text (§5.3 for Q3, §5.4 for
-Q1/Q2/Q6, §5.5 for Q4; Q5's citation-form request is addressed by the note retained in §8).
-
-# Response to reviewers — round 2
-
-Round 2 confirmed that round 1's most serious fixes (the statistical power ceiling and the
-elect-and-reoptimize holdout leakage) hold up against a direct code-level re-check, not just against
-the response table above. It also found one new, comparably serious structural gap — the paper's
-"graded identically" claim did not hold for the response-level composite score, which is the exact
-number Table 3 reports — plus two results tables that promised quantities the pipeline could not yet
-produce, and a small arithmetic slip. Every blocking and suggested change is addressed below.
-
-| # | Required change | Status | Where |
-|---|---|---|---|
-| 1 | Fix or scope down the "graded identically" claim for the response-level score | **Done (scoped, not built)** | We take the review's option (b): `compare_to_foundry.py` no longer silently substitutes Foundry's in-sample `outputs.composite_score` for a missing `holdout_composite_score`; it now reports the gap explicitly. §5.2, §5.3, and the Abstract are rewritten to state plainly that the shared-code guarantee currently covers the instruction-level layer only, and that Foundry's response-level holdout score requires a harness this pack does not yet build. Added to §8 Limitations and §9 Future work. |
-| 2 | Table 4's `regression_blocks`-on-holdout criterion has no data source | **Done (narrowed)** | Table 4's caption and column now report `blocked: false` only, the one criterion the pipeline actually records; the unimplemented per-test pass/fail clause is removed from the caption and listed instead as future work (§9). |
-| 3 | Table 7's cost-growth-ratio column is never computed anywhere | **Done (dropped, later implemented)** | Dropped from Table 7 in this revision's initial pass; subsequently implemented (`_tools/model_pricing.py`, wired into `run_mipro_baseline.py` and `run_manifest_template.json` — see `docs/paper/publication-plan.md` item #11) and restored to Table 7 with an explicit note that the underlying price table is unverified against live vendor pricing. |
-| 4 | Add a CI column to Table 8 | **Done** | Table 8's "independent replicate runs" column now reports mean ± sd and a bootstrap 95% CI, matching what §7's own interpretive bullet asks the reader to check the Run 3 score against. |
-| 5 | Add the partial-overlap tool-call penalty term to §5.3's formula | **Done** | §5.3 now states the `-0.1` per-missing-tool partial-overlap penalty alongside the full-miss and forbidden-call terms. |
-| 6 | Correct §4.2's "mean 10.3" | **Done** | Corrected to the directly-recomputed mean of 10.1 (totals 9, 10, 9, 10, 13, 10, 10, 10, 10, 10 across the ten agents). |
-| 7 | Add the "rows omitted" note to Table 5 | **Done** | Table 5's caption now states the same "N total in the final version" note Tables 4 and 6 already carried. |
-| 8 | Disclose the response-scoring gap and the dropped cost metric in Limitations | **Done** | §8 gains two new items: the Foundry-side response-scoring harness gap (item 1 above), and the absence of a cost-growth-ratio metric (item 3 above). |
-
-All four of round 2's questions for the authors are answered by the changes above: Q1–Q2 by item 1's
-scoping decision (§5.2, §5.3, §8), Q3 by item 3, Q4 by item 2.
-
+status: "DRAFT v4 — responds to an external journal review of paper-v3.md (see response-letters/external-journal-review.md); the two earlier internal review-cycle responses are response-letters/round-1.md and round-2.md. Contains placeholder experimental data, clearly marked. Not for submission."
 ---
 
 # Auditing closed-loop prompt optimization for LLM agents: a benchmark and reproducible baseline
 
 **Authors:** [author list withheld — internal draft]
-**Draft status:** Version 3 (final of three planned revision passes). All tables in Section 6 contain
+**Draft status:** Version 4. Responds to an external journal review of `paper-v3.md`; the response
+letter is at `response-letters/external-journal-review.md` (and, for the two earlier internal
+review rounds, `response-letters/round-1.md` / `round-2.md`) — kept separate from this manuscript so
+the paper itself reads as a paper, not a revision log. All tables in Section 6 contain
 **illustrative, placeholder data** generated to show the intended structure of the results, not real
 experimental findings. See the banner at the start of Section 6 for the scope of what is and is not
 real in this draft.
@@ -380,8 +328,7 @@ claimed authority — specifically so that a fix which only pattern-matches the 
 phrasing is distinguishable from a fix that generalizes the underlying rule.
 
 This separation is enforced by construction in the direct baseline-vs-optimized comparison (Section
-5.2), and — after a leakage path we identified and closed during this paper's own review (see the
-Response to Reviewers above) — in the iterative-refinement condition as well (Section 5.4): electing
+5.2), and — after a leakage path identified during this paper's review process (see `response-letters/round-1.md`) — in the iterative-refinement condition as well (Section 5.4): electing
 between replicate runs uses only a validation slice of the optimizer-visible data, never the held-out
 split, so the held-out score reported for any condition, iterative or not, reflects data no part of
 that condition's selection process has seen.

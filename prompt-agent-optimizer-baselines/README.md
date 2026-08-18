@@ -73,7 +73,8 @@ exact wording is caught rather than rewarded.
 10-expense-claim-boundary/       capability honesty + financial fabrication + rounding, 2 tools
 _schema/                         expectations.schema.json (v2.0.0)
 _tools/                          validate_candidate.py, build_foundry_dataset.py,
-                                  similarity_baseline.py, run_manifest_template.json
+                                  similarity_baseline.py, human_calibration.py,
+                                  run_manifest_template.json
 _baselines/dspy_mipro/           open DSPy MIPROv2 baseline — see its own README.md
 CHANGELOG.md                     review findings → fixes, cross-referenced
 manifest.json
@@ -140,6 +141,14 @@ Each agent's `expected/expectations.json` carries:
   shared word choice alone) and a **cross-agent null** (unrelated agents' baselines — the similarity
   floor for genuinely unrelated prompts), plus an **expectations-agreement** axis (Jaccard overlap of
   which rule IDs each candidate passes) so lexical and substantive similarity are never conflated.
+- **`_tools/human_calibration.py`** — judge-vs-human calibration for `llm_judge.py`, using the SAME
+  `JudgeAgreementTracker` the primary/cross-judge self-preference check uses (it was written generic
+  over "two raters," not specifically "two judges"). `--sample` builds a stratified shortlist of
+  judge-eligible items (oversampling the safety-critical agent and `should_edit`/semantic `must_have`
+  items) for a human rater to fill in against a specific run's real candidate text; `--score` re-runs
+  the judge against that exact text and reports judge-vs-human agreement (plus human-vs-human, where
+  more than one rater double-rated an item) — see `docs/paper/publication-plan.md` item #4 for why
+  this exists: judge-vs-cross-judge agreement alone never calibrates the judge against a human.
 - **`_tools/run_manifest_template.json`** — copy one per optimizer run. Captures exact model version
   IDs, timestamps, wizard config, dataset hash, and eval-time inference temperature, because Foundry's
   optimizer is a hosted, versioned, non-deterministic service and a "Run 1 vs Run 2" comparison is

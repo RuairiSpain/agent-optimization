@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.3.0 — external journal review response, phase 0 (protocol + tooling, no real run data yet)
+
+Responds to an external journal review of `docs/paper/paper-v3.md`; full triage in
+`docs/paper/publication-plan.md`. All changes here are infrastructure/protocol — see that plan for
+what still needs live Foundry access, a real experimental run, or a human rater (Phases 1-3).
+
+- **Statistical fix (paper-v3.md §5.6):** the paired Wilcoxon signed-rank test used for the
+  cross-system (Foundry vs. DSPy) comparison was invalid — replicate seeds from the two systems
+  share no randomness, so pairing them by seed index was arbitrary. Now: one-sample Wilcoxon
+  signed-rank for the within-system baseline-delta claim (still valid — paired against a fixed
+  constant), Mann-Whitney U for the cross-system claim. Derived the Mann-Whitney sample-size floor
+  (`2 / C(2n, n)`) — it clears the Holm-corrected threshold at k=6 per system, not k=9 like the
+  invalid paired test needed.
+- **`_baselines/dspy_mipro/metric.py`:** `score_response`'s penalty weights, floors, and severity
+  table are now a single named `DEFAULT_WEIGHTS` dict, with an optional `weights=` override —
+  backward-compatible (default behavior unchanged), and the foundation for weight-sensitivity
+  analysis.
+- **`_baselines/dspy_mipro/score_sensitivity.py` (new):** re-scores already-captured
+  `(query, response, tool_calls)` logs under a grid of perturbed `score_response` weights — zero new
+  LM calls — reporting how far each agent/run's mean score can move from the pre-registered
+  baseline. Answers the "were these weights ever checked for robustness" review finding directly.
+- **`_tools/human_calibration.py` (new):** judge-vs-human calibration for `llm_judge.py`, reusing
+  `JudgeAgreementTracker` unchanged. `--sample` builds a stratified shortlist (oversampling the
+  safety-critical agent and `should_edit`/semantic `must_have` items); `--score` re-runs the judge
+  against the human-rated text and reports judge-vs-human (and human-vs-human, where rated by more
+  than one person) agreement.
+- **`_tools/model_pricing.py` (new) + `run_mipro_baseline.py` + `run_manifest_template.json`:** a
+  cost-growth-ratio formula (word-count-proxy tokens, the same proxy `instruction_growth_ratio`
+  already used, priced against a small, dated, explicitly `verified: False` per-model rate table),
+  wired into both manifest formats as `baseline_est_cost_per_call_usd` /
+  `optimized_est_cost_per_call_usd` / `est_cost_growth_ratio`. Restores paper-v3.md Table 7's cost
+  column, which an earlier revision had dropped for lack of any supporting computation.
+- **`_baselines/dspy_mipro/compare_to_foundry.py`:** added `est_cost_growth_ratio` summarization for
+  both tracks. Also fixed a pre-existing crash found while smoke-testing this change: `summarize()`'s
+  empty-input branch used a different CI dict key (`ci95`) than its populated branch
+  (`ci95_bootstrap`), and the print loop only checked the latter — it crashed on the first agent
+  with zero manifests, which is the common case in any partial run.
+
 ## 2.2.0 — shared LLM-judge layer for semantic rules and rubrics
 
 Adds `_tools/llm_judge.py`, resolving the "UNJUDGED queue" limitation both `validate_candidate.py`

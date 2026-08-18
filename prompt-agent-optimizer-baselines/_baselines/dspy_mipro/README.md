@@ -163,6 +163,28 @@ sample stdev, and a **percentile bootstrap 95% CI** (not a normal approximation 
 small replicate counts, k=3-5, this pack expects) per agent per system. If no Foundry manifests exist
 yet, it says so explicitly rather than filling the gap with a placeholder number.
 
+## Composite-score weight sensitivity analysis
+
+```bash
+python score_sensitivity.py --results-dir results --out results/sensitivity_report.json
+```
+
+Re-scores every already-captured `(query, response, tool_calls)` triple in each run's
+`holdout_eval.json` / `baseline_holdout_eval.json` under a grid of perturbed `score_response`
+weights (severity weights, per-item penalties, the `regression_blocks` floor — all ±25% or an
+adjacent alternative), and, where a log has a cached `rubric_score`, under a `judge_weight` grid too
+— all with **zero new LM calls**, since the captured responses are reused as-is. Reports, per
+agent/run, how far the mean score can move away from the pre-registered baseline weights across the
+grid. This is a direct answer to the concern that the weights in `metric.DEFAULT_WEIGHTS` were
+hand-tuned with no robustness check (see `docs/paper/publication-plan.md` item #3): a small delta
+across the grid is evidence a paper's conclusion doesn't depend on the exact weight choice; a large
+delta on a conclusion that's close to a threshold means it should be reported with that caveat. It
+cannot show the weights are "correct" — there's no ground truth for that — only that a documented
+family of reasonable alternatives does or doesn't change what gets reported. Scoped to the DSPy
+track today, since Foundry's response-level scoring path doesn't exist yet (see the main pack
+README's Limitations and `docs/paper/paper-v3.md` Section 5.3/8) — it will cover both tracks
+unchanged, from whatever log the Foundry harness eventually writes, once that harness exists.
+
 ## Files
 
 | File | Role |
@@ -176,3 +198,4 @@ yet, it says so explicitly rather than filling the gap with a placeholder number
 | `run_mipro_baseline.py` | CLI: one agent, one seed, full compile + holdout eval + manifest, `--use-judge`/`--cross-judge` |
 | `run_all.py` | Loops `run_mipro_baseline.py` over agents × replicate seeds |
 | `compare_to_foundry.py` | Merges DSPy + Foundry run manifests into one comparison table |
+| `score_sensitivity.py` | Re-scores captured logs under a weight-perturbation grid — no new LM calls |

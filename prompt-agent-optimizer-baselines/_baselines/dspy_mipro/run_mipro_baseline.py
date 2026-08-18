@@ -52,6 +52,7 @@ _TOOLS_DIR = Path(__file__).resolve().parents[2] / "_tools"
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
 from llm_judge import JudgeAgreementTracker, build_judge_backend  # noqa: E402
+from model_pricing import PRICE_TABLE_VERSION, cost_growth_ratio, estimate_cost_usd  # noqa: E402
 
 
 def split_optimize_rows(rows: list, seed: int, val_fraction: float) -> tuple[list, list]:
@@ -109,6 +110,17 @@ def approx_token_count(text: str) -> int:
     """Word-count proxy for token count — no tokenizer dependency. Documented as approximate;
     good enough for a growth RATIO, not for an absolute cost figure."""
     return len(text.split())
+
+
+def _avg_response_words(eval_result: dict) -> float:
+    """Mean word count (the same proxy approx_token_count uses) across an evaluate_on_rows()
+    result's captured responses. Used as the "output tokens per call" side of the cost estimate —
+    see model_pricing.py's module docstring for why this stays a ratio-grade estimate, not a
+    precise cost."""
+    rows = eval_result.get("per_row", [])
+    if not rows:
+        return 0.0
+    return sum(len(r["response"].split()) for r in rows) / len(rows)
 
 
 def main() -> None:
@@ -232,6 +244,22 @@ def main() -> None:
     baseline_valset = evaluate_on_rows(module, val_rows, spec.expectations)
     optimized_valset = evaluate_on_rows(compiled, val_rows, spec.expectations)
 
+    # Estimated cost-growth-ratio (docs/paper/publication-plan.md item #11): input tokens are the
+    # instructions text (sent every call), output tokens are the mean captured response length,
+    # both via the same word-count proxy instruction_growth_ratio_words_approx already uses. Priced
+    # against --task-lm, the model that actually serves the deployed agent, not --prompt-lm (which
+    # only proposes candidates during search and is never invoked per-holdout-call). None (not 0,
+    # not another model's rate) when --task-lm isn't in model_pricing.PRICE_TABLE, or under
+    # --dry-run, since the stub LM has no real per-token cost to estimate.
+    cost_pricing_model = None if args.dry_run else args.task_lm
+    baseline_est_cost = estimate_cost_usd(
+        approx_token_count(spec.baseline_instructions), _avg_response_words(baseline_holdout), cost_pricing_model,
+    ) if cost_pricing_model else None
+    optimized_est_cost = estimate_cost_usd(
+        approx_token_count(optimized_instructions), _avg_response_words(optimized_holdout), cost_pricing_model,
+    ) if cost_pricing_model else None
+    est_cost_growth = cost_growth_ratio(baseline_est_cost, optimized_est_cost)
+
     out_dir = Path(args.out_dir) / args.agent / run_label
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "optimized_instructions.md").write_text(optimized_instructions)
@@ -295,6 +323,16 @@ def main() -> None:
                             "elect-and-reoptimize design — see docs/experiment-runbook.md Step 7.",
             "optimized_instruction_semantic_agreement": optimized_report.get("primary_cross_judge_agreement"),
             "optimized_holdout_rubric_agreement": optimized_holdout.get("rubric_judge_agreement"),
+            "baseline_est_cost_per_call_usd": round(baseline_est_cost, 6) if baseline_est_cost is not None else None,
+            "optimized_est_cost_per_call_usd": round(optimized_est_cost, 6) if optimized_est_cost is not None else None,
+            "est_cost_growth_ratio": round(est_cost_growth, 3) if est_cost_growth is not None else None,
+            "cost_pricing_table_version": PRICE_TABLE_VERSION,
+            "cost_estimate_note": (
+                "Word-count-proxy token estimate (see model_pricing.py) priced against --task-lm "
+                "via _tools/model_pricing.PRICE_TABLE. Ratio-grade only, not a precise dollar figure; "
+                "null under --dry-run (no real per-token cost for the stub LM) or when --task-lm "
+                "isn't in PRICE_TABLE (never silently substituted with 0 or another model's rate)."
+            ),
         },
     }
     (out_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2))

@@ -76,7 +76,10 @@ def bootstrap_ci(values: list[float], n_resamples: int = 2000, seed: int = 7) ->
 
 def summarize(values: list[float]) -> dict:
     if not values:
-        return {"n": 0, "mean": None, "stdev": None, "ci95": None, "note": "no runs available"}
+        # Same key shape as the non-empty branch below (ci95_bootstrap, not ci95) -- a caller (e.g.
+        # main()'s print loop) that only checks one key name must not have to special-case "0
+        # values" separately from "1+ values".
+        return {"n": 0, "mean": None, "stdev": None, "ci95_bootstrap": None, "note": "no runs available"}
     mean = statistics.mean(values)
     stdev = statistics.stdev(values) if len(values) > 1 else None
     ci = bootstrap_ci(values)
@@ -130,6 +133,11 @@ def main() -> None:
         dspy_optimized = [m["outputs"]["optimized_holdout_mean_score"] for m in dspy_manifests]
         dspy_blocked = [m["outputs"]["optimized_instruction_report_blocked"] for m in dspy_manifests]
         dspy_growth = [m["outputs"]["instruction_growth_ratio_words_approx"] for m in dspy_manifests]
+        # est_cost_growth_ratio is None whenever --task-lm wasn't in model_pricing.PRICE_TABLE (or
+        # under --dry-run) -- filter those out rather than let a None poison the mean, and report
+        # how many manifests actually had a priced cost estimate.
+        dspy_cost_growth_values = [m["outputs"].get("est_cost_growth_ratio") for m in dspy_manifests]
+        dspy_cost_growth_priced = [v for v in dspy_cost_growth_values if v is not None]
         any_dry_run = any(m.get("dry_run") for m in dspy_manifests)
 
         foundry_scores, foundry_in_sample_only = foundry_holdout_scores(foundry_manifests)
@@ -162,11 +170,17 @@ def main() -> None:
                 "optimized_holdout_score": summarize(dspy_optimized),
                 "instruction_blocked_rate": (sum(dspy_blocked) / len(dspy_blocked)) if dspy_blocked else None,
                 "instruction_growth_ratio": summarize(dspy_growth),
+                "est_cost_growth_ratio": summarize(dspy_cost_growth_priced),
+                "n_runs_missing_cost_estimate": len(dspy_manifests) - len(dspy_cost_growth_priced),
             },
             "foundry_optimizer": {
                 "n_runs": len(foundry_manifests),
                 "n_in_sample_only_no_holdout_score": foundry_in_sample_only,
                 "holdout_score": summarize(foundry_scores),
+                "est_cost_growth_ratio": summarize(
+                    [m["outputs"]["est_cost_growth_ratio"] for m in foundry_manifests
+                     if m.get("outputs", {}).get("est_cost_growth_ratio") is not None]
+                ),
                 "status": foundry_status,
             },
         }

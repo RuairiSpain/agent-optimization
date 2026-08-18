@@ -2,8 +2,11 @@
 
 This plan turns the external review (pasted into this project, referred to below as **"the
 journal review"** to distinguish it from our own two internal `agent-paper-reviewer` rounds) into
-a scoped, sequenced set of actions. It does not implement any of them yet — this is the "what and
-in what order" document the user asked for before we touch code or prose again.
+a scoped, sequenced set of actions.
+
+**Status: Phase 0 complete** (greenlit 2026-08-18). Every §5 Phase 0 item is done — see
+`response-letters/external-journal-review.md` for the item-by-item disposition and `paper-v4.md`
+for the resulting manuscript. Phases 1-4 remain open and gated on live Foundry access (§7).
 
 **Framing.** The journal review's own overall assessment is the right one to anchor on: the design
 is sound and unusually rigorous for this space, but the paper is *incomplete*, not *wrong* — every
@@ -211,34 +214,47 @@ for.
 
 ---
 
-## 6. Venue recommendation
+## 6. Venue: dual target — TMLR and NeurIPS Datasets & Benchmarks
 
-The review itself is graded against "EMNLP's empirical standards," but EMNLP is a conference, not
-a journal, and you asked specifically about a journal. Two real options fit this paper's shape
-(a careful benchmark + harness + open baseline, not a headline accuracy result):
+**Decision (made 2026-08-18): pursue both**, not primary/alternate. They don't conflict — TMLR is
+a journal with rolling review and no exclusivity requirement against submitting the same work to a
+conference track before a TMLR decision is out, and NeurIPS D&B is the closest annual-deadline
+venue to this paper's actual contribution shape (benchmark + harness + open baseline). Practical
+sequencing implications, since the two have different rhythms:
 
-- **TMLR (Transactions on Machine Learning Research)** — an actual journal, rolling submission (no
-  fixed deadline pressure, which matters given Phase 1–3's real-world dependencies), and its
-  explicit acceptance criterion is "is the work correct and well-executed," not "is it surprising"
-  — a strong match for a paper whose main strength is methodological rigor rather than a splashy
-  result. **Recommended primary target.**
-- **NeurIPS Datasets & Benchmarks Track** — not a journal, but the content fit is close to perfect
-  (this is exactly what the track exists for), and it's the highest-visibility option if you're
-  willing to work against its fixed annual deadline instead of TMLR's rolling one.
+- **NeurIPS D&B has a fixed annual deadline** (typically ~May for the following December
+  conference) and a fixed, non-negotiable bar: real results, no placeholders, full harness
+  (including the Foundry response-level scoring path from Phase 1) working end-to-end well before
+  submission. If the Foundry harness (Phase 1) or the real experimental run (Phase 2) slips past
+  that deadline for a given year, NeurIPS D&B for that cycle is off the table — there's no rolling
+  fallback. Track the actual current-year deadline once Phase 1 is underway and treat it as the
+  hard forcing function for Phases 1–3's timeline, not the other way around.
+- **TMLR has no deadline** — submit whenever Phase 4 (real numbers, real Sections 6/7/10) is
+  actually done, independent of the NeurIPS calendar. If the NeurIPS D&B deadline is missed in a
+  given cycle, that costs nothing for TMLR; the same finished paper goes there instead, or first,
+  with no changes needed beyond formatting (TMLR doesn't enforce a page limit or camera-ready
+  conference template the way NeurIPS D&B does — the same LaTeX source largely works for both,
+  minus the venue-specific style file and page-limit trimming NeurIPS demands).
+- **Recommended path**: keep the same finished manuscript on both tracks — write for TMLR's
+  no-page-limit norms first (all appendices/tables in the main body), then produce a NeurIPS D&B
+  submission by moving overflow content to an appendix to fit its page limit, once the Foundry
+  deadline for that year is confirmed reachable. Do not submit to both simultaneously (most venues
+  bar concurrent submission of the same paper) — decide which one goes first once Phase 4's
+  finish date is known relative to the nearest NeurIPS D&B deadline.
 
-COLM and ACL Rolling Review (→EMNLP/ACL/NAACL) are reasonable secondary options but are a tighter
-content fit for the DSPy/optimization-methods side of this paper than for its benchmark-and-audit
-framing; TMLR or NeurIPS D&B fit the actual contribution better.
+COLM and ACL Rolling Review (→EMNLP/ACL/NAACL) remain reasonable fallback options if either primary
+target's review comes back requesting changes larger than a revision, but are a tighter content fit
+for the DSPy/optimization-methods side of this paper than for its benchmark-and-audit framing.
 
 ---
 
-## 7. What this plan does *not* do yet
+## 7. Decisions made / still open
 
-Nothing above has been implemented. Phase 0 is entirely within this environment's reach and could
-start as soon as you say go; Phases 1–3 need things only you can provide (Foundry access, run
-budget, human rating time). Worth deciding before we start:
+**Resolved 2026-08-18:**
+- Phase 0 is greenlit, in full.
+- Venue: dual target, TMLR and NeurIPS D&B (§6) — no single primary.
 
-1. Greenlight Phase 0 now, in full, or a subset of it first?
-2. Do you have (or can you get) live Foundry Agent Service access for Phase 1, and on what
-   timeline — that's the one dependency that gates everything downstream of it.
-3. TMLR as primary target, or do you want to keep NeurIPS D&B (or another venue) on the table?
+**Still open, gating Phase 1 onward:**
+1. Do you have (or can you get) live Foundry Agent Service access for Phase 1, and on what
+   timeline — that's the one dependency that gates everything downstream of it, and (per §6) the
+   one that determines whether a given year's NeurIPS D&B deadline is reachable at all.

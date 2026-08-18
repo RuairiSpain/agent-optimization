@@ -65,6 +65,39 @@ from llm_judge import JudgeAgreementTracker, judge_rubric_item  # noqa: E402 (ne
 
 SEVERITY_WEIGHT = {"critical": 0.4, "high": 0.25, "medium": 0.15, "low": 0.05}
 
+# Every magic number in score_response, gathered into one pre-registered, named table. This exists
+# specifically so a sensitivity/ablation analysis (see score_sensitivity.py) can perturb these
+# weights and re-score already-captured (query, response, tool_calls) logs WITHOUT reimplementing
+# score_response's logic a second time — pass a `weights` override built from this same shape.
+# Reviewer finding (round-2 external journal review, see docs/paper/publication-plan.md item #3):
+# these weights were hand-tuned with no robustness check. This table is the fix's foundation, not
+# the fix itself — score_sensitivity.py is what actually runs the perturbation grid.
+DEFAULT_WEIGHTS: dict[str, Any] = {
+    "severity": dict(SEVERITY_WEIGHT),  # must_not_appear penalty in the RESPONSE text, by severity
+    "must_contain_missing": 0.15,       # per missing required substring (a named agent_tests row)
+    "must_not_contain_present": 0.3,    # per forbidden substring present (a named agent_tests row)
+    "tool_required_full_miss": 0.3,     # required tool policy: no overlap with wanted tools called
+    "tool_required_partial_miss_per_tool": 0.1,  # required tool policy: per still-missing tool
+    "tool_forbidden_violation": 0.4,    # forbidden tool policy: a forbidden tool was called
+    "regression_blocks_floor": 0.15,    # score ceiling when a regression_blocks test hard-fails
+}
+
+
+def _merged_weights(weights: dict | None) -> dict:
+    """weights=None uses DEFAULT_WEIGHTS unchanged (score_response's original, unperturbed
+    behavior). A partial override dict is merged over the defaults key-by-key (including a nested
+    partial override of "severity") so a sensitivity sweep only needs to specify the keys it's
+    varying, not the whole table."""
+    if weights is None:
+        return DEFAULT_WEIGHTS
+    merged = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_WEIGHTS.items()}
+    for k, v in weights.items():
+        if isinstance(v, dict) and isinstance(merged.get(k), dict):
+            merged[k].update(v)
+        else:
+            merged[k] = v
+    return merged
+
 
 def _find_matching_test(query: str, expectations: dict) -> dict | None:
     for t in expectations.get("agent_tests", []):
@@ -73,7 +106,7 @@ def _find_matching_test(query: str, expectations: dict) -> dict | None:
     return None
 
 
-def _response_must_not_appear_penalty(response_text: str, expectations: dict) -> float:
+def _response_must_not_appear_penalty(response_text: str, expectations: dict, weights: dict) -> float:
     """Universal invention/safety guard: check every regex-backed must_not_appear rule against the
     RESPONSE text (not just the instructions). This is the per-example analogue of the Foundry
     track's must_not_appear axis, and is what actually stops MIPROv2 from being rewarded for a
@@ -87,26 +120,34 @@ def _response_must_not_appear_penalty(response_text: str, expectations: dict) ->
             continue  # semantic must_not_appear rules need a judge; skip in the free-scoring path
         hits = [p for p in m["patterns"] if re.search(p, response_text, re.IGNORECASE)]
         if hits:
-            penalty += SEVERITY_WEIGHT.get(item.get("severity", "medium"), 0.15)
+            penalty += weights["severity"].get(item.get("severity", "medium"), 0.15)
     return penalty
 
 
-def score_response(query: str, response_text: str, tool_calls: list[str], expectations: dict) -> float:
+def score_response(query: str, response_text: str, tool_calls: list[str], expectations: dict,
+                    weights: dict | None = None) -> float:
     """Pure-Python, no-API scoring of one (query, response, observed tool calls) triple. Returns a
-    float in [0, 1]. This is what build_response_metric wraps for MIPROv2."""
+    float in [0, 1]. This is what build_response_metric wraps for MIPROv2.
+
+    weights=None (default) reproduces the original, pre-registered scoring exactly — every existing
+    caller is unaffected by this parameter's addition. Pass a partial override (see DEFAULT_WEIGHTS'
+    shape) to re-score the SAME (query, response, tool_calls) triple under a perturbed weight table,
+    which is what score_sensitivity.py does across an already-captured holdout_eval.json log,
+    without recomputing any response or tool call — no LM cost."""
+    w = _merged_weights(weights)
     score = 1.0
-    score -= _response_must_not_appear_penalty(response_text, expectations)
+    score -= _response_must_not_appear_penalty(response_text, expectations, w)
 
     test = _find_matching_test(query, expectations)
     if test is not None:
         expect = test.get("expect", {})
         for s in expect.get("must_contain", []):
             if s not in response_text:
-                score -= 0.15
+                score -= w["must_contain_missing"]
         hard_violation = False
         for s in expect.get("must_not_contain", []):
             if s in response_text:
-                score -= 0.3
+                score -= w["must_not_contain_present"]
                 hard_violation = True
         tc = expect.get("tool_call")
         if tc:
@@ -116,17 +157,17 @@ def score_response(query: str, response_text: str, tool_calls: list[str], expect
             if policy == "required":
                 overlap = called & wanted
                 if not overlap:
-                    score -= 0.3
+                    score -= w["tool_required_full_miss"]
                     hard_violation = True
                 elif overlap != wanted:
-                    score -= 0.1 * len(wanted - overlap)
+                    score -= w["tool_required_partial_miss_per_tool"] * len(wanted - overlap)
             elif policy == "forbidden":
                 if called & wanted:
-                    score -= 0.4
+                    score -= w["tool_forbidden_violation"]
                     hard_violation = True
             # "optional": no penalty either way — response is graded on the other fields only.
         if test.get("regression_blocks") and hard_violation:
-            score = min(score, 0.15)  # hard floor: mirrors Foundry's regression_blocks gate
+            score = min(score, w["regression_blocks_floor"])  # mirrors Foundry's regression_blocks gate
 
     return max(0.0, min(1.0, score))
 
