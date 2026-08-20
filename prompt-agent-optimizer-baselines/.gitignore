@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+
+# Artifacts the notebooks/ series generates when run (portal exports, run manifests, wizard
+# upload files, similarity reports) -- reproducible from the notebooks, not checked in.
+*/candidates/
+runs/
+upload_*.jsonl
